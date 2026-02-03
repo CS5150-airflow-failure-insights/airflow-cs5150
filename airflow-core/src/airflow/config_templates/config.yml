@@ -1823,7 +1823,7 @@ api_auth:
         Not required, but strongly recommended to be set.
 
         See also :ref:`config:api_auth__jwt_audience`
-      default: ~
+      default: "airflow"
       example: "http://my-airflow.mycompany.com"
       type: string
     jwt_leeway:
