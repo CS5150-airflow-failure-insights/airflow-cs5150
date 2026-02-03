@@ -439,17 +439,16 @@ class JWTGenerator:
         now = int(datetime.now(tz=timezone.utc).timestamp())
         claims = {
             "jti": uuid.uuid4().hex,
-            "iss": self.issuer,
-            "aud": self.audience,
             "nbf": now,
             "exp": int(now + self.valid_for),
             "iat": now,
         }
-
-        if claims["iss"] is None:
-            del claims["iss"]
-        if claims["aud"] is None:
-            del claims["aud"]
+        
+        # Only add iss and aud claims if they are not None
+        if self.issuer is not None:
+            claims["iss"] = self.issuer
+        if self.audience is not None:
+            claims["aud"] = self.audience
 
         if extras is not None:
             claims = extras | claims
