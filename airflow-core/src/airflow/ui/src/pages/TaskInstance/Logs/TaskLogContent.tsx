@@ -23,6 +23,7 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
 import { FiChevronDown, FiChevronUp, FiEdit2 } from "react-icons/fi";
 
+import { useAuthLinksServiceGetCurrentUserInfo } from "openapi/queries";
 import { ErrorAlert } from "src/components/ErrorAlert";
 import { Dialog, ProgressBar, Tooltip } from "src/components/ui";
 import { getMetaKey } from "src/utils";
@@ -88,6 +89,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const [buttonPos, setButtonPos] = useState<{ x: number; y: number } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const { data: currentUser } = useAuthLinksServiceGetCurrentUserInfo();
 
   const handleMouseUp = useCallback(() => {
     const selection = window.getSelection();
@@ -122,7 +124,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const handleSubmitNote = () => {
     // TODO: replace this with a real API call to save the note to the backend
     // eslint-disable-next-line no-console
-    console.log("Saving error note:", { note: noteText, selectedText });
+    console.log("Saving error note:", { note: noteText, selectedText, currentUser });
     setIsModalOpen(false);
     setSelectedText("");
     setNoteText("");
