@@ -16,15 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { Box, Code, VStack, IconButton } from "@chakra-ui/react";
+import { Box, Code, VStack, IconButton, Textarea, Text, Button, HStack } from "@chakra-ui/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState, useCallback } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
-import { FiChevronDown, FiChevronUp } from "react-icons/fi";
+import { FiChevronDown, FiChevronUp, FiEdit2 } from "react-icons/fi";
 
 import { ErrorAlert } from "src/components/ErrorAlert";
-import { ProgressBar, Tooltip } from "src/components/ui";
+import { Dialog, ProgressBar, Tooltip } from "src/components/ui";
 import { getMetaKey } from "src/utils";
 
 import { scrollToBottom, scrollToTop } from "./utils";
@@ -83,6 +83,60 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const hash = location.hash.replace("#", "");
   const parentRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Annotate-on-highlight state ────────────────────────────────────────
+  const [selectedText, setSelectedText] = useState<string>("");
+  const [buttonPos, setButtonPos] = useState<{ x: number; y: number } | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [noteText, setNoteText] = useState("");
+
+  const handleMouseUp = useCallback(() => {
+    const selection = window.getSelection();
+    const text = selection?.toString().trim() ?? "";
+
+    if (!text || !parentRef.current) {
+      setButtonPos(null);
+      setSelectedText("");
+      return;
+    }
+
+    // Only show the icon if the selection is inside our log container
+    const range = selection?.getRangeAt(0);
+    if (!range || !parentRef.current.contains(range.commonAncestorContainer)) {
+      setButtonPos(null);
+      setSelectedText("");
+      return;
+    }
+
+    const rect = range.getBoundingClientRect();
+    setButtonPos({ x: rect.right + 6, y: rect.top - 4 });
+    setSelectedText(text);
+  }, []);
+
+  const handleOpenModal = () => {
+    setNoteText("");
+    setIsModalOpen(true);
+    // The floating button disappears once the modal opens
+    setButtonPos(null);
+  };
+
+  const handleSubmitNote = () => {
+    // TODO: replace this with a real API call to save the note to the backend
+    // eslint-disable-next-line no-console
+    console.log("Saving error note:", { note: noteText, selectedText });
+    setIsModalOpen(false);
+    setSelectedText("");
+    setNoteText("");
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedText("");
+    setNoteText("");
+    window.getSelection()?.removeAllRanges();
+  };
+  // ──────────────────────────────────────────────────────────────────────
+
   const rowVirtualizer = useVirtualizer({
     count: parsedLogs.length,
     estimateSize: () => 20,
@@ -129,6 +183,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
         data-testid="virtual-scroll-container"
         flexGrow={1}
         minHeight={0}
+        onMouseUp={handleMouseUp}
         overflow="auto"
         position="relative"
         py={3}
@@ -179,6 +234,84 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
           <ScrollToButton direction="bottom" onClick={() => handleScrollTo("bottom")} />
         </>
       ) : undefined}
+
+      {/* Floating annotate icon — appears at the end of a text selection */}
+      {buttonPos !== null && (
+        <IconButton
+          aria-label="Add error note"
+          bg="bg.panel"
+          border="1px solid"
+          borderColor="border.emphasized"
+          boxShadow="sm"
+          left={`${buttonPos.x}px`}
+          onClick={handleOpenModal}
+          position="fixed"
+          rounded="md"
+          size="xs"
+          title="Add error note"
+          top={`${buttonPos.y}px`}
+          zIndex={1500}
+          color={"black"}
+        >
+          <FiEdit2 />
+        </IconButton>
+      )}
+
+      {/* Error note modal */}
+      <Dialog.Root onOpenChange={handleCloseModal} open={isModalOpen} size="md">
+        <Dialog.Content>
+          <Dialog.Header>
+            <Text fontSize="lg" fontWeight="semibold">
+              Add Error Note
+            </Text>
+          </Dialog.Header>
+          <Dialog.CloseTrigger />
+
+          <Dialog.Body display="flex" flexDirection="column" gap={3}>
+            <Box>
+              <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
+                Highlighted text
+              </Text>
+              <Code
+                borderRadius="md"
+                display="block"
+                fontSize="xs"
+                maxH="100px"
+                overflowY="auto"
+                p={2}
+                whiteSpace="pre-wrap"
+                wordBreak="break-all"
+              >
+                {selectedText}
+              </Code>
+            </Box>
+
+            <Box>
+              <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
+                Note
+              </Text>
+              <Textarea
+                autoFocus
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Describe this error and how to fix it…"
+                rows={5}
+                value={noteText}
+              />
+            </Box>
+          </Dialog.Body>
+
+          <Dialog.Footer>
+            <HStack gap={2} justifyContent="flex-end">
+              <Button onClick={handleCloseModal} variant="outline">
+                Cancel
+              </Button>
+              <Button colorPalette="blue" disabled={!noteText.trim()} onClick={handleSubmitNote}>
+                Save Note
+              </Button>
+            </HStack>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </Dialog.Root>
     </Box>
   );
 };
