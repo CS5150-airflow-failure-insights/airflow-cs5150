@@ -68,6 +68,7 @@ def import_all_models():
     import airflow.models.dagbundle
     import airflow.models.dagwarning
     import airflow.models.deadline_alert
+    import airflow.models.error_insight
     import airflow.models.errors
     import airflow.models.error_note
     import airflow.models.error_signature
