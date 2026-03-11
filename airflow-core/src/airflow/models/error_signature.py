@@ -14,31 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
+from airflow.models.error_insight import ErrorSignature
 
-from datetime import datetime
-
-from sqlalchemy import Boolean, Integer, String, Text
-from sqlalchemy.orm import Mapped, relationship
-
-from airflow._shared.timezones import timezone
-from airflow.models.base import Base
-from airflow.utils.sqlalchemy import UtcDateTime, mapped_column
-
-
-class ErrorSignature(Base):
-    """Normalized signature for deduplicating structurally equivalent errors."""
-
-    __tablename__ = "error_signature"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    signature_canonical: Mapped[str] = mapped_column(Text, nullable=False)
-    signature_regex: Mapped[str] = mapped_column(Text, nullable=False)
-    signature_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=timezone.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        UtcDateTime, default=timezone.utcnow, onupdate=timezone.utcnow, nullable=False
-    )
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-
-    notes = relationship("ErrorNote", back_populates="signature", cascade="all, delete-orphan")
+__all__ = ["ErrorSignature"]
