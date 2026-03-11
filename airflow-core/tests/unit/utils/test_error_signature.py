@@ -57,3 +57,28 @@ def test_regex_and_hash_are_deterministic():
     regex = create_signature_regex(canonical_a)
     assert re.search(regex, text_a)
     assert re.search(regex, text_b)
+
+def test_uuid_normalization():
+    text = "run_id=123e4567-e89b-12d3-a456-426614174000"
+    canonical = create_signature_canonical(text)
+    assert "<UUID>" in canonical    
+
+def test_timestamp_normalization():
+    text = "2026-03-03 14:22:10 ERROR something failed"
+    canonical = create_signature_canonical(text)
+    assert "<TS>" in canonical
+
+def test_path_normalization():
+    text = 'File "/Users/test/project/file.py", line 12'
+    canonical = create_signature_canonical(text)
+    assert "<PATH>" in canonical
+
+def test_regex_matches_equivalent_errors():
+    text_a = "KeyError token_1111 at /tmp/run_2026.log"
+    text_b = "KeyError token_2222 at /tmp/run_2027.log"
+
+    canonical = create_signature_canonical(text_a)
+    regex = create_signature_regex(canonical)
+
+    assert re.search(regex, text_a)
+    assert re.search(regex, text_b)
