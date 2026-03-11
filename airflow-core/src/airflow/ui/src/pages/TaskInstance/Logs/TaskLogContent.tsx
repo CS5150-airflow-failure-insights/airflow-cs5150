@@ -18,10 +18,10 @@
  */
 import { Box, Code, VStack, IconButton, Textarea, Text, Button, HStack } from "@chakra-ui/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useLayoutEffect, useRef, useState, useCallback } from "react";
+import { isValidElement, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
-import { FiChevronDown, FiChevronUp, FiEdit2 } from "react-icons/fi";
+import { FiBookOpen, FiChevronDown, FiChevronUp, FiEdit2 } from "react-icons/fi";
 
 import { useAuthLinksServiceGetCurrentUserInfo } from "openapi/queries";
 import { ErrorAlert } from "src/components/ErrorAlert";
@@ -37,6 +37,53 @@ type Props = {
   readonly parsedLogs: Array<JSX.Element | string | undefined>;
   readonly wrap: boolean;
 };
+
+// TODO(backend): Replace all MOCK_* constants with a list of error-note records fetched from API.
+// Expected future shape (example): { id, signature, triggerLine, matchedErrorText, author, description }
+const MOCK_ERROR_NOTE_TRIGGER_LINE = "KeyError: 'SNOWFLAKE_ACCOUNT'";
+const MOCK_ERROR_NOTE_TRIGGER_SIGNATURE =
+  "KeyError: 'SNOWFLAKE_ACCOUNT' File \".../airflow/models/variable.py\", line 176, in get raise KeyError(key) KeyError: 'SNOWFLAKE_ACCOUNT'";
+const MOCK_ERROR_NOTE_MATCHED_ERROR_TEXT = `ERROR - KeyError: 'SNOWFLAKE_ACCOUNT'\n  File ".../airflow/models/variable.py", line 176, in get\n    raise KeyError(key)\nKeyError: 'SNOWFLAKE_ACCOUNT'`;
+const MOCK_ERROR_NOTE_AUTHOR = "Katie";
+const MOCK_ERROR_NOTE_DESCRIPTION =
+  "This usually means the Airflow Variable `SNOWFLAKE_ACCOUNT` is missing. Add it in Admin > Variables (or your env-backed secret store), then re-run the task.";
+
+const extractTextFromNode = (node: unknown): string => {
+  if (node === undefined || node === null || typeof node === "boolean") {
+    return "";
+  }
+
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((child) => extractTextFromNode(child)).join("");
+  }
+
+  if (!isValidElement(node)) {
+    return "";
+  }
+
+  const { children } = node.props as { children?: unknown };
+
+  return extractTextFromNode(children);
+};
+
+const getLogEntryText = (entry: JSX.Element | string | undefined): string => {
+  if (entry === undefined) {
+    return "";
+  }
+
+  if (typeof entry === "string") {
+    return entry;
+  }
+
+  return extractTextFromNode(entry);
+};
+
+// Normalizes text so matching is stable across whitespace/newline differences in logs.
+const normalizeForSignatureMatch = (text: string): string => text.toLowerCase().replace(/\s+/g, "").trim();
 
 const ScrollToButton = ({
   direction,
@@ -88,8 +135,36 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const [selectedText, setSelectedText] = useState<string>("");
   const [buttonPos, setButtonPos] = useState<{ x: number; y: number } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const { data: currentUser } = useAuthLinksServiceGetCurrentUserInfo();
+
+  const matchingErrorNoteLineIndexes = useMemo(() => {
+    const matches = new Set<number>();
+    const normalizedSignature = normalizeForSignatureMatch(MOCK_ERROR_NOTE_TRIGGER_SIGNATURE);
+    const windowSize = 6;
+
+    // TODO(backend): Iterate over all signatures returned by the API and collect matching line indexes per note id.
+    parsedLogs.forEach((entry, index) => {
+      const currentLine = getLogEntryText(entry);
+      const normalizedCurrentLine = normalizeForSignatureMatch(currentLine);
+      const concatenatedWindow = parsedLogs
+        .slice(index, index + windowSize)
+        .map((windowEntry) => getLogEntryText(windowEntry))
+        .join(" ");
+      const normalizedWindow = normalizeForSignatureMatch(concatenatedWindow);
+
+      const isMatchingErrorNoteSignature =
+        normalizedCurrentLine.includes(normalizeForSignatureMatch(MOCK_ERROR_NOTE_TRIGGER_LINE)) &&
+        normalizedWindow.includes(normalizedSignature);
+
+      if (isMatchingErrorNoteSignature) {
+        matches.add(index);
+      }
+    });
+
+    return matches;
+  }, [parsedLogs]);
 
   const handleMouseUp = useCallback(() => {
     const selection = window.getSelection();
@@ -223,7 +298,28 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 transform={`translateY(${virtualRow.start}px)`}
                 width={wrap ? "100%" : "max-content"}
               >
-                {parsedLogs[virtualRow.index] ?? undefined}
+                <HStack alignItems="flex-start" gap={0}>
+                  {matchingErrorNoteLineIndexes.has(virtualRow.index) ? (
+                    <Tooltip content="View error note" openDelay={100}>
+                      <IconButton
+                        aria-label="View error note"
+                        colorPalette="blue"
+                        h="16px"
+                        minW="16px"
+                        // TODO(backend): Open the note tied to the matched signature id for this log row.
+                        onClick={() => setIsKnowledgeModalOpen(true)}
+                        px={0}
+                        size="2xs"
+                        title="View error note"
+                        variant="ghost"
+                        w="16px"
+                      >
+                        <FiBookOpen />
+                      </IconButton>
+                    </Tooltip>
+                  ) : undefined}
+                  <Box>{parsedLogs[virtualRow.index] ?? undefined}</Box>
+                </HStack>
               </Box>
             ))}
           </VStack>
@@ -311,6 +407,57 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 Save Note
               </Button>
             </HStack>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      <Dialog.Root onOpenChange={() => setIsKnowledgeModalOpen(false)} open={isKnowledgeModalOpen} size="md">
+        <Dialog.Content>
+          <Dialog.Header>
+            <Text fontSize="lg" fontWeight="semibold">
+              Error Note
+            </Text>
+          </Dialog.Header>
+          <Dialog.CloseTrigger />
+
+          <Dialog.Body display="flex" flexDirection="column" gap={3}>
+            <Box>
+              <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
+                Matched error
+              </Text>
+              <Code
+                borderRadius="md"
+                display="block"
+                fontSize="xs"
+                maxH="120px"
+                overflowY="auto"
+                p={2}
+                whiteSpace="pre-wrap"
+                wordBreak="break-all"
+              >
+                {MOCK_ERROR_NOTE_MATCHED_ERROR_TEXT}
+              </Code>
+            </Box>
+
+            <Box>
+              <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
+                Author
+              </Text>
+              <Text>{MOCK_ERROR_NOTE_AUTHOR}</Text>
+            </Box>
+
+            <Box>
+              <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
+                Note
+              </Text>
+              <Text>{MOCK_ERROR_NOTE_DESCRIPTION}</Text>
+            </Box>
+          </Dialog.Body>
+
+          <Dialog.Footer>
+            <Button onClick={() => setIsKnowledgeModalOpen(false)} variant="outline">
+              Close
+            </Button>
           </Dialog.Footer>
         </Dialog.Content>
       </Dialog.Root>
