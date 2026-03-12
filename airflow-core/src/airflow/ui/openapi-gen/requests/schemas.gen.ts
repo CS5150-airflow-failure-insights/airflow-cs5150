@@ -8387,6 +8387,132 @@ export const $Theme = {
     description: "JSON to modify Chakra's theme."
 } as const;
 
+export const $ErrorNoteCreateBody = {
+    description: 'Payload for creating a user-authored error note.',
+    properties: {
+        highlighted_text: {
+            type: 'string',
+            title: 'Highlighted Text',
+            minLength: 1
+        },
+        author: {
+            type: 'string',
+            title: 'Author',
+            minLength: 1
+        },
+        note_text: {
+            type: 'string',
+            title: 'Note Text',
+            minLength: 1
+        },
+        external_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'External Url'
+        }
+    },
+    required: ['highlighted_text', 'author', 'note_text'],
+    title: 'ErrorNoteCreateBody'
+} as const;
+
+export const $ErrorNoteLookupBody = {
+    description: 'Payload for looking up notes associated with a highlighted error.',
+    properties: {
+        highlighted_text: {
+            type: 'string',
+            title: 'Highlighted Text',
+            minLength: 1
+        }
+    },
+    required: ['highlighted_text'],
+    title: 'ErrorNoteLookupBody'
+} as const;
+
+export const $ErrorNotePatchBody = {
+    description: 'Payload for updating the text of an existing error note.',
+    properties: {
+        note_text: {
+            type: 'string',
+            title: 'Note Text',
+            minLength: 1
+        }
+    },
+    required: ['note_text'],
+    title: 'ErrorNotePatchBody'
+} as const;
+
+export const $ErrorNoteResponse = {
+    description: 'Response returned for a single persisted error note.',
+    properties: {
+        note_id: {
+            type: 'integer',
+            minimum: 0,
+            title: 'Note Id'
+        },
+        signature_id: {
+            type: 'integer',
+            minimum: 0,
+            title: 'Signature Id'
+        },
+        author: {
+            type: 'string',
+            title: 'Author'
+        },
+        note_text: {
+            type: 'string',
+            title: 'Note Text'
+        },
+        external_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'External Url'
+        },
+        created_at: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Created At'
+        },
+        updated_at: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Updated At'
+        }
+    },
+    required: ['note_id', 'signature_id', 'author', 'note_text', 'created_at', 'updated_at'],
+    title: 'ErrorNoteResponse'
+} as const;
+
+export const $ErrorNoteCollectionResponse = {
+    description: 'Aggregated notes for a resolved error signature.',
+    properties: {
+        notes: {
+            items: {
+                '$ref': '#/components/schemas/ErrorNoteResponse'
+            },
+            type: 'array',
+            title: 'Notes'
+        },
+        total_entries: {
+            type: 'integer',
+            title: 'Total Entries'
+        }
+    },
+    required: ['notes', 'total_entries'],
+    title: 'ErrorNoteCollectionResponse'
+} as const;
+
 export const $UIAlert = {
     properties: {
         text: {

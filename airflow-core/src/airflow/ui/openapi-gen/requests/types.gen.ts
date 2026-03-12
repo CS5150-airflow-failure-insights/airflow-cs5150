@@ -2081,6 +2081,51 @@ export type Theme = {
 };
 
 /**
+ * Payload for creating a user-authored error note.
+ */
+export type ErrorNoteCreateBody = {
+    highlighted_text: string;
+    author: string;
+    note_text: string;
+    external_url?: string | null;
+};
+
+/**
+ * Payload for looking up notes associated with a highlighted error.
+ */
+export type ErrorNoteLookupBody = {
+    highlighted_text: string;
+};
+
+/**
+ * Payload for updating the text of an existing error note.
+ */
+export type ErrorNotePatchBody = {
+    note_text: string;
+};
+
+/**
+ * Response returned for a single persisted error note.
+ */
+export type ErrorNoteResponse = {
+    note_id: number;
+    signature_id: number;
+    author: string;
+    note_text: string;
+    external_url?: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
+/**
+ * Aggregated notes for a resolved error signature.
+ */
+export type ErrorNoteCollectionResponse = {
+    notes: Array<ErrorNoteResponse>;
+    total_entries: number;
+};
+
+/**
  * Optional alert to be shown at the top of the page.
  */
 export type UIAlert = {
@@ -3500,6 +3545,31 @@ export type ListTeamsData = {
 };
 
 export type ListTeamsResponse = TeamCollectionResponse;
+
+export type CreateErrorNoteData = {
+    requestBody: ErrorNoteCreateBody;
+};
+
+export type CreateErrorNoteResponse = ErrorNoteResponse;
+
+export type LookupErrorNotesData = {
+    requestBody: ErrorNoteLookupBody;
+};
+
+export type LookupErrorNotesResponse = ErrorNoteCollectionResponse;
+
+export type UpdateErrorNoteData = {
+    noteId: number;
+    requestBody: ErrorNotePatchBody;
+};
+
+export type UpdateErrorNoteResponse = ErrorNoteResponse;
+
+export type DeleteErrorNoteData = {
+    noteId: number;
+};
+
+export type DeleteErrorNoteResponse = void;
 
 export type $OpenApiTs = {
     '/api/v2/assets': {
@@ -6726,6 +6796,100 @@ export type $OpenApiTs = {
                  * Validation Error
                  */
                 422: HTTPValidationError;
+            };
+        };
+    };
+    '/ui/error-notes': {
+        post: {
+            req: CreateErrorNoteData;
+            res: {
+                /**
+                 * Created
+                 */
+                201: ErrorNoteResponse;
+                /**
+                 * Unauthorized
+                 */
+                401: HTTPExceptionResponse;
+                /**
+                 * Forbidden
+                 */
+                403: HTTPExceptionResponse;
+                /**
+                 * Validation Error
+                 */
+                422: HTTPValidationError;
+            };
+        };
+    };
+    '/ui/error-notes/lookup': {
+        post: {
+            req: LookupErrorNotesData;
+            res: {
+                /**
+                 * Successful Response
+                 */
+                200: ErrorNoteCollectionResponse;
+                /**
+                 * Unauthorized
+                 */
+                401: HTTPExceptionResponse;
+                /**
+                 * Forbidden
+                 */
+                403: HTTPExceptionResponse;
+                /**
+                 * Validation Error
+                 */
+                422: HTTPValidationError;
+            };
+        };
+    };
+    '/ui/error-notes/{note_id}': {
+        patch: {
+            req: UpdateErrorNoteData;
+            res: {
+                /**
+                 * Successful Response
+                 */
+                200: ErrorNoteResponse;
+                /**
+                 * Unauthorized
+                 */
+                401: HTTPExceptionResponse;
+                /**
+                 * Forbidden
+                 */
+                403: HTTPExceptionResponse;
+                /**
+                 * Not Found
+                 */
+                404: HTTPExceptionResponse;
+                /**
+                 * Validation Error
+                 */
+                422: HTTPValidationError;
+            };
+        };
+        delete: {
+            req: DeleteErrorNoteData;
+            res: {
+                /**
+                 * No Content
+                 */
+                204: void;
+                /**
+                 * Unauthorized
+                 */
+                401: HTTPExceptionResponse;
+                /**
+                 * Forbidden
+                 */
+                403: HTTPExceptionResponse;
+                /**
+                 * Not Found
+                 */
+                404: HTTPExceptionResponse;
             };
         };
     };

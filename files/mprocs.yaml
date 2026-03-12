@@ -1,0 +1,21 @@
+procs:
+  scheduler:
+    shell: airflow scheduler
+    restart: always
+    scrollback: 100000
+  api_server:
+    shell: airflow api-server
+    restart: always
+    scrollback: 100000
+  triggerer:
+    shell: airflow triggerer
+    restart: always
+    scrollback: 100000
+  dag_processor:
+    shell: airflow dag-processor
+    restart: always
+    scrollback: 100000
+  shell:
+    shell: bash
+    restart: always
+    scrollback: 100000

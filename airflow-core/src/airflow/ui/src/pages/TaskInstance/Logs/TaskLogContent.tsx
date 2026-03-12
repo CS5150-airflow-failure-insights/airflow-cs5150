@@ -17,6 +17,7 @@
  * under the License.
  */
 import { Box, Code, VStack, IconButton, Textarea, Text, Button, HStack } from "@chakra-ui/react";
+import { useMutation } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useLayoutEffect, useRef, useState, useCallback } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -25,8 +26,9 @@ import { FiChevronDown, FiChevronUp, FiEdit2 } from "react-icons/fi";
 
 import { useAuthLinksServiceGetCurrentUserInfo } from "openapi/queries";
 import { ErrorAlert } from "src/components/ErrorAlert";
-import { Dialog, ProgressBar, Tooltip } from "src/components/ui";
+import { Dialog, ProgressBar, Tooltip, toaster } from "src/components/ui";
 import { getMetaKey } from "src/utils";
+import { createErrorNote, lookupErrorNotes, type ErrorNoteResponse } from "src/utils/errorNotes";
 
 import { scrollToBottom, scrollToTop } from "./utils";
 
@@ -90,6 +92,33 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const { data: currentUser } = useAuthLinksServiceGetCurrentUserInfo();
+  const [existingNotes, setExistingNotes] = useState<Array<ErrorNoteResponse> | undefined>(undefined);
+  const [noteError, setNoteError] = useState<unknown>(undefined);
+
+  const { mutateAsync: lookupNotes, isPending: isLookingUpNotes } = useMutation(lookupErrorNotes, {
+    onError: (error) => setNoteError(error),
+  });
+  const { mutateAsync: submitNote, isPending: isCreatingNote } = useMutation(createErrorNote, {
+    onError: (error) => setNoteError(error),
+  });
+
+  const fetchExistingNotes = useCallback(
+    async (text: string) => {
+      if (!text) {
+        setExistingNotes([]);
+        return;
+      }
+
+      setExistingNotes(undefined);
+      try {
+        const { notes = [] } = await lookupNotes(text);
+        setExistingNotes(notes);
+      } catch {
+        setExistingNotes([]);
+      }
+    },
+    [lookupNotes],
+  );
 
   const handleMouseUp = useCallback(() => {
     const selection = window.getSelection();
@@ -119,22 +148,44 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     setIsModalOpen(true);
     // The floating button disappears once the modal opens
     setButtonPos(null);
+    setNoteError(undefined);
+    void fetchExistingNotes(selectedText);
   };
 
   const handleSubmitNote = () => {
-    // TODO: replace this with a real API call to save the note to the backend
-    // eslint-disable-next-line no-console
-    console.log("Saving error note:", { note: noteText, selectedText, currentUser });
-    setIsModalOpen(false);
-    setSelectedText("");
-    setNoteText("");
-    window.getSelection()?.removeAllRanges();
+    const trimmed = noteText.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    setNoteError(undefined);
+
+    submitNote({
+      highlighted_text: selectedText,
+      author: currentUser?.username ?? "",
+      note_text: trimmed,
+      external_url: null,
+    })
+      .then(() => {
+        toaster.create({
+          title: "Error note saved",
+          description: "Documented note for this highlight.",
+          type: "success",
+        });
+        handleCloseModal();
+      })
+      .catch(() => {
+        // Error state already captured in onError
+      });
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedText("");
     setNoteText("");
+    setExistingNotes(undefined);
+    setNoteError(undefined);
     window.getSelection()?.removeAllRanges();
   };
   // ──────────────────────────────────────────────────────────────────────
@@ -179,7 +230,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
 
   return (
     <Box display="flex" flexDirection="column" flexGrow={1} h="100%" minHeight={0} position="relative">
-      <ErrorAlert error={error ?? logError} />
+      <ErrorAlert error={error ?? logError ?? noteError} />
       <ProgressBar size="xs" visibility={isLoading ? "visible" : "hidden"} />
       <Box
         data-testid="virtual-scroll-container"
@@ -287,6 +338,40 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 {selectedText}
               </Code>
             </Box>
+
+            {existingNotes !== undefined || isLookingUpNotes ? (
+              <Box>
+                <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
+                  Related notes
+                </Text>
+                {isLookingUpNotes ? (
+                  <Text fontSize="xs" color="fg.muted">
+                    Looking up related notes…
+                  </Text>
+                ) : existingNotes && existingNotes.length > 0 ? (
+                  <VStack align="stretch" gap={2}>
+                    {existingNotes.map((note) => (
+                      <Box
+                        borderWidth={1}
+                        borderColor="border.muted"
+                        borderRadius="md"
+                        key={note.note_id}
+                        p={2}
+                      >
+                        <Text fontSize="sm">{note.note_text}</Text>
+                        <Text fontSize="xs" color="fg.muted">
+                          {note.author} • {new Date(note.created_at).toLocaleString()}
+                        </Text>
+                      </Box>
+                    ))}
+                  </VStack>
+                ) : (
+                  <Text fontSize="xs" color="fg.muted">
+                    No notes are documented yet for this highlight.
+                  </Text>
+                )}
+              </Box>
+            ) : undefined}
 
             <Box>
               <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">

@@ -1,8 +1,8 @@
 // generated with @7nohe/openapi-react-query-codegen@1.6.2 
 
 import { UseMutationOptions, UseQueryOptions, useMutation, useQuery } from "@tanstack/react-query";
-import { AssetService, AuthLinksService, BackfillService, CalendarService, ConfigService, ConnectionService, DagParsingService, DagRunService, DagService, DagSourceService, DagStatsService, DagVersionService, DagWarningService, DashboardService, DependenciesService, EventLogService, ExperimentalService, ExtraLinksService, GridService, ImportErrorService, JobService, LoginService, MonitorService, PluginService, PoolService, ProviderService, StructureService, TaskInstanceService, TaskService, TeamsService, VariableService, VersionService, XcomService } from "../requests/services.gen";
-import { BackfillPostBody, BulkBody_BulkTaskInstanceBody_, BulkBody_ConnectionBody_, BulkBody_PoolBody_, BulkBody_VariableBody_, ClearTaskInstancesBody, ConnectionBody, CreateAssetEventsBody, DAGPatchBody, DAGRunClearBody, DAGRunPatchBody, DAGRunsBatchBody, DagRunState, DagWarningType, PatchTaskInstanceBody, PoolBody, PoolPatchBody, TaskInstancesBatchBody, TriggerDAGRunPostBody, UpdateHITLDetailPayload, VariableBody, XComCreateBody, XComUpdateBody } from "../requests/types.gen";
+import { AssetService, AuthLinksService, BackfillService, CalendarService, ConfigService, ConnectionService, DagParsingService, DagRunService, DagService, DagSourceService, DagStatsService, DagVersionService, DagWarningService, DashboardService, DependenciesService, ErrorNoteService, EventLogService, ExperimentalService, ExtraLinksService, GridService, ImportErrorService, JobService, LoginService, MonitorService, PluginService, PoolService, ProviderService, StructureService, TaskInstanceService, TaskService, TeamsService, VariableService, VersionService, XcomService } from "../requests/services.gen";
+import { BackfillPostBody, BulkBody_BulkTaskInstanceBody_, BulkBody_ConnectionBody_, BulkBody_PoolBody_, BulkBody_VariableBody_, ClearTaskInstancesBody, ConnectionBody, CreateAssetEventsBody, DAGPatchBody, DAGRunClearBody, DAGRunPatchBody, DAGRunsBatchBody, DagRunState, DagWarningType, ErrorNoteCreateBody, ErrorNoteLookupBody, ErrorNotePatchBody, PatchTaskInstanceBody, PoolBody, PoolPatchBody, TaskInstancesBatchBody, TriggerDAGRunPostBody, UpdateHITLDetailPayload, VariableBody, XComCreateBody, XComUpdateBody } from "../requests/types.gen";
 import * as Common from "./common";
 /**
 * Get Assets
@@ -1926,6 +1926,30 @@ export const useVariableServicePostVariable = <TData = Common.VariableServicePos
   requestBody: VariableBody;
 }, TContext>({ mutationFn: ({ requestBody }) => VariableService.postVariable({ requestBody }) as unknown as Promise<TData>, ...options });
 /**
+* Create Error Note
+* @param data The data for the request.
+* @param data.requestBody
+* @returns ErrorNoteResponse Created
+* @throws ApiError
+*/
+export const useErrorNoteServiceCreateErrorNote = <TData = Common.ErrorNoteServiceCreateErrorNoteMutationResult, TError = unknown, TContext = unknown>(options?: Omit<UseMutationOptions<TData, TError, {
+  requestBody: ErrorNoteCreateBody;
+}, TContext>, "mutationFn">) => useMutation<TData, TError, {
+  requestBody: ErrorNoteCreateBody;
+}, TContext>({ mutationFn: ({ requestBody }) => ErrorNoteService.createErrorNote({ requestBody }) as unknown as Promise<TData>, ...options });
+/**
+* Lookup Error Notes
+* @param data The data for the request.
+* @param data.requestBody
+* @returns ErrorNoteCollectionResponse Successful Response
+* @throws ApiError
+*/
+export const useErrorNoteServiceLookupErrorNotes = <TData = Common.ErrorNoteServiceLookupErrorNotesMutationResult, TError = unknown, TContext = unknown>(options?: Omit<UseMutationOptions<TData, TError, {
+  requestBody: ErrorNoteLookupBody;
+}, TContext>, "mutationFn">) => useMutation<TData, TError, {
+  requestBody: ErrorNoteLookupBody;
+}, TContext>({ mutationFn: ({ requestBody }) => ErrorNoteService.lookupErrorNotes({ requestBody }) as unknown as Promise<TData>, ...options });
+/**
 * Pause Backfill
 * @param data The data for the request.
 * @param data.backfillId
@@ -2333,6 +2357,21 @@ export const useVariableServiceBulkVariables = <TData = Common.VariableServiceBu
   requestBody: BulkBody_VariableBody_;
 }, TContext>({ mutationFn: ({ requestBody }) => VariableService.bulkVariables({ requestBody }) as unknown as Promise<TData>, ...options });
 /**
+* Update Error Note
+* @param data The data for the request.
+* @param data.noteId
+* @param data.requestBody
+* @returns ErrorNoteResponse Successful Response
+* @throws ApiError
+*/
+export const useErrorNoteServiceUpdateErrorNote = <TData = Common.ErrorNoteServiceUpdateErrorNoteMutationResult, TError = unknown, TContext = unknown>(options?: Omit<UseMutationOptions<TData, TError, {
+  noteId: number;
+  requestBody: ErrorNotePatchBody;
+}, TContext>, "mutationFn">) => useMutation<TData, TError, {
+  noteId: number;
+  requestBody: ErrorNotePatchBody;
+}, TContext>({ mutationFn: ({ noteId, requestBody }) => ErrorNoteService.updateErrorNote({ noteId, requestBody }) as unknown as Promise<TData>, ...options });
+/**
 * Delete Asset Queued Events
 * Delete queued asset events for an asset.
 * @param data The data for the request.
@@ -2497,3 +2536,15 @@ export const useVariableServiceDeleteVariable = <TData = Common.VariableServiceD
 }, TContext>, "mutationFn">) => useMutation<TData, TError, {
   variableKey: string;
 }, TContext>({ mutationFn: ({ variableKey }) => VariableService.deleteVariable({ variableKey }) as unknown as Promise<TData>, ...options });
+/**
+* Delete Error Note
+* @param data The data for the request.
+* @param data.noteId
+* @returns void No Content
+* @throws ApiError
+*/
+export const useErrorNoteServiceDeleteErrorNote = <TData = Common.ErrorNoteServiceDeleteErrorNoteMutationResult, TError = unknown, TContext = unknown>(options?: Omit<UseMutationOptions<TData, TError, {
+  noteId: number;
+}, TContext>, "mutationFn">) => useMutation<TData, TError, {
+  noteId: number;
+}, TContext>({ mutationFn: ({ noteId }) => ErrorNoteService.deleteErrorNote({ noteId }) as unknown as Promise<TData>, ...options });
