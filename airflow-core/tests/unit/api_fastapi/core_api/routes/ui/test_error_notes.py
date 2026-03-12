@@ -24,6 +24,41 @@ from airflow.models.error_signature import ErrorSignature
 
 pytestmark = pytest.mark.db_test
 
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from airflow.models.base import Base
+from airflow.models.error_note import ErrorNote
+from airflow.models.error_signature import ErrorSignature
+
+from airflow.models.base import Base
+from airflow.utils.session import create_session
+from airflow.settings import engine
+
+from airflow.utils.db import initdb
+import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def airflow_db():
+    initdb()
+
+
+@pytest.fixture
+def session():
+    engine = create_engine("sqlite:///:memory:")
+
+    # Only create the tables needed for these tests
+    ErrorSignature.__table__.create(engine)
+    ErrorNote.__table__.create(engine)
+
+    Session = sessionmaker(bind=engine)
+    session = Session()
+
+    yield session
+
+    session.close()
 
 @pytest.fixture(autouse=True)
 def clean_db(session):
@@ -120,3 +155,128 @@ class TestErrorNotesRoutes:
             "/error-notes/lookup", json={"highlighted_text": "KeyError: token_1111"}
         )
         assert response.status_code == 401
+        
+    def test_lookup_creates_signature_if_missing(self, test_client, session):
+        text = "ValueError: invalid token_1234 in /tmp/file.log"
+
+        response = test_client.post(
+            "/error-notes/lookup",
+            json={"highlighted_text": text},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["total_entries"] == 0
+
+        signature_count = session.scalar(select(func.count()).select_from(ErrorSignature))
+        assert signature_count == 1
+    def test_similar_errors_share_same_signature(self, test_client, session):
+        text_a = "KeyError token_1111 at /tmp/run_2026-01-01.log"
+        text_b = "KeyError token_9999 at /tmp/run_2026-02-02.log"
+
+        test_client.post(
+            "/error-notes",
+            json={
+                "highlighted_text": text_a,
+                "author": "a",
+                "note_text": "first note",
+            },
+        )
+
+        test_client.post(
+            "/error-notes",
+            json={
+                "highlighted_text": text_b,
+                "author": "b",
+                "note_text": "second note",
+            },
+        )
+
+        signature_count = session.scalar(select(func.count()).select_from(ErrorSignature))
+        assert signature_count == 1    
+
+    def test_different_errors_create_different_signatures(self, test_client, session):
+        text_a = "KeyError token_1111 at /tmp/run.log"
+        text_b = "ValueError invalid value at /tmp/run.log"
+
+        test_client.post(
+            "/error-notes",
+            json={
+                "highlighted_text": text_a,
+                "author": "user",
+                "note_text": "note a",
+            },
+        )
+
+        test_client.post(
+            "/error-notes",
+            json={
+                "highlighted_text": text_b,
+                "author": "user",
+                "note_text": "note b",
+            },
+        )
+
+        signature_count = session.scalar(select(func.count()).select_from(ErrorSignature))
+        assert signature_count == 2    
+
+    def test_soft_deleted_notes_not_returned(self, test_client, session):
+        text = "IndexError list index out of range token_123"
+
+        create = test_client.post(
+            "/error-notes",
+            json={
+                "highlighted_text": text,
+                "author": "user",
+                "note_text": "debug note",
+            },
+        )
+
+        note_id = create.json()["note_id"]
+
+        test_client.delete(f"/error-notes/{note_id}")
+
+        lookup = test_client.post(
+            "/error-notes/lookup",
+            json={"highlighted_text": text},
+        )
+
+        assert lookup.status_code == 200
+        assert lookup.json()["total_entries"] == 0    
+
+    def test_notes_returned_in_creation_order(self, test_client):
+        text = "RuntimeError worker failure token_111"
+
+        r1 = test_client.post(
+            "/error-notes",
+            json={"highlighted_text": text, "author": "a", "note_text": "first"},
+        )
+
+        r2 = test_client.post(
+            "/error-notes",
+            json={"highlighted_text": text, "author": "b", "note_text": "second"},
+        )
+
+        lookup = test_client.post(
+            "/error-notes/lookup",
+            json={"highlighted_text": text},
+        )
+
+        notes = lookup.json()["notes"]
+
+        assert notes[0]["note_id"] == r1.json()["note_id"]
+        assert notes[1]["note_id"] == r2.json()["note_id"]    
+
+    def test_external_url_optional(self, test_client):
+        text = "ConnectionError token_777"
+
+        response = test_client.post(
+            "/error-notes",
+            json={
+                "highlighted_text": text,
+                "author": "user",
+                "note_text": "no url provided",
+            },
+        )
+
+        assert response.status_code == 201
+        assert response.json()["external_url"] is None    
