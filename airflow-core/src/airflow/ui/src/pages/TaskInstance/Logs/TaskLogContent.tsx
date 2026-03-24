@@ -466,7 +466,6 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 Reference Documentation Link
               </Text>
               <Textarea
-                autoFocus
                 onChange={(e) => setNoteURL(e.target.value)}
                 placeholder="https://example.com/docs"
                 rows={1}
