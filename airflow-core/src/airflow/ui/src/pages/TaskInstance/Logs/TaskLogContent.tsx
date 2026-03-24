@@ -23,12 +23,17 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
 import { FiBookOpen, FiChevronDown, FiChevronUp, FiEdit2 } from "react-icons/fi";
 
+
+
 import { useAuthLinksServiceGetCurrentUserInfo } from "openapi/queries";
 import { ErrorAlert } from "src/components/ErrorAlert";
 import { Dialog, ProgressBar, Tooltip } from "src/components/ui";
 import { getMetaKey } from "src/utils";
 
+
+
 import { scrollToBottom, scrollToTop } from "./utils";
+
 
 type Props = {
   readonly error: unknown;
@@ -47,6 +52,7 @@ const MOCK_ERROR_NOTE_MATCHED_ERROR_TEXT = `ERROR - KeyError: 'SNOWFLAKE_ACCOUNT
 const MOCK_ERROR_NOTE_AUTHOR = "Katie";
 const MOCK_ERROR_NOTE_DESCRIPTION =
   "This usually means the Airflow Variable `SNOWFLAKE_ACCOUNT` is missing. Add it in Admin > Variables (or your env-backed secret store), then re-run the task.";
+const MOCK_ERROR_NOTE_LINK = "https://airflow.apache.org/docs/apache-airflow/stable/howto/variable.html";
 
 const extractTextFromNode = (node: unknown): string => {
   if (node === undefined || node === null || typeof node === "boolean") {
@@ -137,6 +143,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const [noteURL, setNoteURL] = useState("");
   const { data: currentUser } = useAuthLinksServiceGetCurrentUserInfo();
 
   const matchingErrorNoteLineIndexes = useMemo(() => {
@@ -199,10 +206,11 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const handleSubmitNote = () => {
     // TODO: replace this with a real API call to save the note to the backend
     // eslint-disable-next-line no-console
-    console.log("Saving error note:", { note: noteText, selectedText, currentUser });
+    console.log("Saving error note:", { note: noteText, selectedText, currentUser, url: noteURL });
     setIsModalOpen(false);
     setSelectedText("");
     setNoteText("");
+    setNoteURL("");
     window.getSelection()?.removeAllRanges();
   };
 
@@ -210,6 +218,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     setIsModalOpen(false);
     setSelectedText("");
     setNoteText("");
+    setNoteURL("");
     window.getSelection()?.removeAllRanges();
   };
   // ──────────────────────────────────────────────────────────────────────
@@ -396,6 +405,18 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 value={noteText}
               />
             </Box>
+            <Box>
+              <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
+                Reference Documentation Link
+              </Text>
+              <Textarea
+                autoFocus
+                onChange={(e) => setNoteURL(e.target.value)}
+                placeholder="https://example.com/docs"
+                rows={1}
+                value={noteURL}
+              />
+            </Box>
           </Dialog.Body>
 
           <Dialog.Footer>
@@ -403,7 +424,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
               <Button onClick={handleCloseModal} variant="outline">
                 Cancel
               </Button>
-              <Button colorPalette="blue" disabled={!noteText.trim()} onClick={handleSubmitNote}>
+              <Button colorPalette="blue" disabled={!noteText.trim() && !noteURL.trim()} onClick={handleSubmitNote}>
                 Save Note
               </Button>
             </HStack>
@@ -451,6 +472,12 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 Note
               </Text>
               <Text>{MOCK_ERROR_NOTE_DESCRIPTION}</Text>
+            </Box>
+            <Box>
+              <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
+                Reference Documentation
+              </Text>
+              <Text>{MOCK_ERROR_NOTE_LINK}</Text>
             </Box>
           </Dialog.Body>
 
