@@ -21,7 +21,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { isValidElement, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
-import { FiBookOpen, FiChevronDown, FiChevronUp, FiEdit2, FiTrash2 } from "react-icons/fi";
+import { FiBookOpen, FiChevronDown, FiChevronUp, FiEdit2, FiTrash2, FiExternalLink } from "react-icons/fi";
 
 
 
@@ -493,64 +493,104 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
 
       <Dialog.Root onOpenChange={handleCloseKnowledgeModal} open={isKnowledgeModalOpen} size="md">
         <Dialog.Content>
-          <Dialog.Header>
-            <Text fontSize="lg" fontWeight="semibold">
-              Error Note
-            </Text>
+          <Dialog.Header pb={4}>
+            <HStack gap={2} alignItems="center">
+              <FiBookOpen size={20} />
+              <Text fontSize="lg" fontWeight="bold">
+                Error Note
+              </Text>
+            </HStack>
           </Dialog.Header>
           <Dialog.CloseTrigger />
 
-          <Dialog.Body display="flex" flexDirection="column" gap={3}>
-            <Box>
-              <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
-                Matched error
+          <Dialog.Body display="flex" flexDirection="column" gap={4}>
+            {/* Matched Error Section */}
+            <Box borderRadius="md" bg="gray.50" p={3}>
+              <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={2}>
+                Matched Error
               </Text>
               <Code
-                borderRadius="md"
+                borderRadius="sm"
                 display="block"
-                fontSize="xs"
-                maxH="120px"
+                fontSize="sm"
+                maxH="140px"
                 overflowY="auto"
-                p={2}
+                p={2.5}
                 whiteSpace="pre-wrap"
-                wordBreak="break-all"
+                wordBreak="break-word"
+                bg="white"
+                borderLeft="3px solid"
+                borderColor="red.400"
               >
                 {activeMatchedNote?.highlightedText ?? "-"}
               </Code>
             </Box>
 
-            <Box>
-              <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
-                Author
-              </Text>
-              <Text>{activeMatchedNote?.author ?? "-"}</Text>
+            {/* Author & Metadata Row */}
+            <Box display="flex" gap={4}>
+              <Box flex={1}>
+                <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={1}>
+                  Author
+                </Text>
+                <Text fontSize="sm" fontWeight="medium">
+                  {activeMatchedNote?.author ?? "-"}
+                </Text>
+              </Box>
+              {activeMatchedLineIndex !== null ? (
+                <Box flex={1}>
+                  <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={1}>
+                    Log Line
+                  </Text>
+                  <Text fontSize="sm" fontWeight="medium">
+                    {activeMatchedLineIndex + 1}
+                  </Text>
+                </Box>
+              ) : null}
             </Box>
 
+            {/* Note Content Section */}
             <Box>
-              <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
-                Note
+              <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={2}>
+                Resolution
               </Text>
-              <Text>{activeMatchedNote?.noteText ?? "-"}</Text>
+              <Text fontSize="sm" lineHeight="1.6" color="gray.800">
+                {activeMatchedNote?.noteText ?? "-"}
+              </Text>
             </Box>
 
-            <Box>
-              <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
-                Reference Documentation
-              </Text>
-              <Text>{activeMatchedNote?.externalUrl ?? "-"}</Text>
-            </Box>
-
-            {activeMatchedLineIndex !== null ? (
-              <Text color="fg.muted" fontSize="xs">
-                Log line: {activeMatchedLineIndex + 1}
-              </Text>
-            ) : undefined}
+            {/* Reference Documentation Section */}
+            {activeMatchedNote?.externalUrl ? (
+              <Box borderRadius="md" bg="blue.50" p={3} borderLeft="3px solid" borderColor="blue.400">
+                <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={2}>
+                  Reference Documentation
+                </Text>
+                <Text
+                  as="a"
+                  href={activeMatchedNote.externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  color="blue.600"
+                  fontSize="sm"
+                  fontWeight="medium"
+                  display="flex"
+                  alignItems="center"
+                  gap={1}
+                  _hover={{ textDecoration: "underline", opacity: 0.8 }}
+                  wordBreak="break-all"
+                >
+                  {activeMatchedNote.externalUrl}
+                  <FiExternalLink size={14} />
+                </Text>
+              </Box>
+            ) : null}
           </Dialog.Body>
 
-          <Dialog.Footer>
-            <Button onClick={handleCloseKnowledgeModal} variant="outline">
-              Close
-            </Button>
+          <Dialog.Footer pt={4} borderTop="1px solid" borderColor="gray.200">
+            <HStack gap={2} justifyContent="flex-end">
+              <Button onClick={handleCloseKnowledgeModal} variant="outline">
+                Close
+              </Button>
+            </HStack>
           </Dialog.Footer>
         </Dialog.Content>
       </Dialog.Root>
