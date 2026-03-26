@@ -18,17 +18,22 @@
  */
 import { Box, Code, VStack, IconButton, Textarea, Text, Button, HStack } from "@chakra-ui/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useLayoutEffect, useRef, useState, useCallback } from "react";
+import { isValidElement, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
-import { FiChevronDown, FiChevronUp, FiEdit2 } from "react-icons/fi";
+import { FiBookOpen, FiChevronDown, FiChevronUp, FiEdit2, FiTrash2, FiExternalLink } from "react-icons/fi";
+
+
 
 import { useAuthLinksServiceGetCurrentUserInfo } from "openapi/queries";
 import { ErrorAlert } from "src/components/ErrorAlert";
 import { Dialog, ProgressBar, Tooltip } from "src/components/ui";
 import { getMetaKey } from "src/utils";
 
+
+
 import { scrollToBottom, scrollToTop } from "./utils";
+
 
 type Props = {
   readonly error: unknown;
@@ -37,6 +42,59 @@ type Props = {
   readonly parsedLogs: Array<JSX.Element | string | undefined>;
   readonly wrap: boolean;
 };
+
+// TODO(backend): Define the shape of error notes returned by the API and replace this with a real type import.
+type UiErrorNote = {
+  id: number;
+  author: string;
+  highlightedText: string;
+  noteText: string;
+  externalUrl: string | null;
+};
+
+// TODO(backend): Replace all MOCK_* constants with a list of error-note records fetched from API.
+// Expected future shape (example): { id, signature, triggerLine, matchedErrorText, author, description }
+
+const extractTextFromNode = (node: unknown): string => {
+  if (node === undefined || node === null || typeof node === "boolean") {
+    return "";
+  }
+
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((child) => extractTextFromNode(child)).join("");
+  }
+
+  if (!isValidElement(node)) {
+    return "";
+  }
+
+  const { children } = node.props as { children?: unknown };
+
+  return extractTextFromNode(children);
+};
+
+const getLogEntryText = (entry: JSX.Element | string | undefined): string => {
+  if (entry === undefined) {
+    return "";
+  }
+
+  if (typeof entry === "string") {
+    return entry;
+  }
+
+  return extractTextFromNode(entry);
+};
+
+// Normalizes text so matching is stable across whitespace/newline differences in logs.
+const normalizeForMatch = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/\s+/g, " ") // collapse whitespace/newlines/tabs
+    .trim();
 
 const ScrollToButton = ({
   direction,
@@ -84,12 +142,59 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const hash = location.hash.replace("#", "");
   const parentRef = useRef<HTMLDivElement | null>(null);
 
+  // MOCK ERROR NOTES
+  const [notes, setNotes] = useState<UiErrorNote[]>([
+    {
+      id: 1,
+      author: "katie",
+      highlightedText:
+        "KeyError: 'SNOWFLAKE_ACCOUNT' File \".../airflow/models/variable.py\", line 176, in get raise KeyError(key) KeyError: 'SNOWFLAKE_ACCOUNT'",
+      noteText: "Example troubleshooting note 1.",
+      externalUrl: "https://airflow.apache.org/docs/apache-airflow/stable/howto/variable.html",
+    },
+    {
+      id: 2,
+      author: "admin",
+      highlightedText: `ERROR - sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) FATAL:  password authentication failed for user "analytics_user"`,
+      noteText: "Example troubleshooting note 2.",
+      externalUrl: "https://airflow.apache.org/docs/apache-airflow/stable/howto/variable.html",
+    },
+  ]);
+
   // ── Annotate-on-highlight state ────────────────────────────────────────
   const [selectedText, setSelectedText] = useState<string>("");
   const [buttonPos, setButtonPos] = useState<{ x: number; y: number } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const [noteURL, setNoteURL] = useState("");
   const { data: currentUser } = useAuthLinksServiceGetCurrentUserInfo();
+
+  const matchingNotesByLineIndex = useMemo(() => {
+    // line index -> notes that match that line
+    const matches = new Map<number, UiErrorNote[]>();
+
+    const normalizedNotes = notes
+      .map((note) => ({
+        note,
+        normalizedHighlightedText: normalizeForMatch(note.highlightedText),
+      }))
+      .filter(({ normalizedHighlightedText }) => normalizedHighlightedText.length > 0);
+
+    parsedLogs.forEach((entry, index) => {
+      const normalizedLine = normalizeForMatch(getLogEntryText(entry));
+
+      const matchedNotes = normalizedNotes
+        .filter(({ normalizedHighlightedText }) => normalizedLine.includes(normalizedHighlightedText))
+        .map(({ note }) => note);
+
+      if (matchedNotes.length > 0) {
+        matches.set(index, matchedNotes);
+      }
+    });
+
+    return matches;
+  }, [parsedLogs, notes]);
 
   const handleMouseUp = useCallback(() => {
     const selection = window.getSelection();
@@ -124,10 +229,11 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const handleSubmitNote = () => {
     // TODO: replace this with a real API call to save the note to the backend
     // eslint-disable-next-line no-console
-    console.log("Saving error note:", { note: noteText, selectedText, currentUser });
+    console.log("Saving error note:", { note: noteText, selectedText, currentUser, url: noteURL });
     setIsModalOpen(false);
     setSelectedText("");
     setNoteText("");
+    setNoteURL("");
     window.getSelection()?.removeAllRanges();
   };
 
@@ -135,6 +241,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     setIsModalOpen(false);
     setSelectedText("");
     setNoteText("");
+    setNoteURL("");
     window.getSelection()?.removeAllRanges();
   };
   // ──────────────────────────────────────────────────────────────────────
@@ -176,6 +283,40 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
 
   useHotkeys("mod+ArrowDown", () => handleScrollTo("bottom"), { enabled: !isLoading });
   useHotkeys("mod+ArrowUp", () => handleScrollTo("top"), { enabled: !isLoading });
+
+  // When multiple notes match the same line, we pick the best one to show in the tooltip/modal.  
+  const [activeMatchedNote, setActiveMatchedNote] = useState<UiErrorNote | null>(null);
+  const [activeMatchedLineIndex, setActiveMatchedLineIndex] = useState<number | null>(null);
+
+  const pickBestMatchedNote = (matchedNotes: UiErrorNote[]): UiErrorNote | null => {
+    if (matchedNotes.length === 0) {
+      return null;
+    }
+
+    // Prefer the most specific signature (longest highlightedText).
+    const sorted = [...matchedNotes].sort((a, b) => b.highlightedText.length - a.highlightedText.length);
+
+    return sorted[0] ?? null;
+  };
+
+  const handleOpenMatchedNote = (lineIndex: number) => {
+    const matchedNotes = matchingNotesByLineIndex.get(lineIndex) ?? [];
+    const bestMatch = pickBestMatchedNote(matchedNotes);
+
+    if (!bestMatch) {
+      return;
+    }
+
+    setActiveMatchedLineIndex(lineIndex);
+    setActiveMatchedNote(bestMatch);
+    setIsKnowledgeModalOpen(true);
+  };
+
+  const handleCloseKnowledgeModal = () => {
+    setIsKnowledgeModalOpen(false);
+    setActiveMatchedLineIndex(null);
+    setActiveMatchedNote(null);
+  };
 
   return (
     <Box display="flex" flexDirection="column" flexGrow={1} h="100%" minHeight={0} position="relative">
@@ -223,7 +364,27 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 transform={`translateY(${virtualRow.start}px)`}
                 width={wrap ? "100%" : "max-content"}
               >
-                {parsedLogs[virtualRow.index] ?? undefined}
+                <HStack alignItems="flex-start" gap={0}>
+                  {(matchingNotesByLineIndex.get(virtualRow.index)?.length ?? 0) > 0 ? (
+                    <Tooltip content="View error note" openDelay={100}>
+                      <IconButton
+                        aria-label="View error note"
+                        colorPalette="blue"
+                        h="16px"
+                        minW="16px"
+                        onClick={() => handleOpenMatchedNote(virtualRow.index)}
+                        px={0}
+                        size="2xs"
+                        title="View error note"
+                        variant="ghost"
+                        w="16px"
+                      >
+                        <FiBookOpen />
+                      </IconButton>
+                    </Tooltip>
+                  ) : undefined}
+                  <Box>{parsedLogs[virtualRow.index] ?? undefined}</Box>
+                </HStack>
               </Box>
             ))}
           </VStack>
@@ -300,6 +461,17 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 value={noteText}
               />
             </Box>
+            <Box>
+              <Text fontSize="xs" fontWeight="medium" mb={1} textTransform="uppercase">
+                Reference Documentation Link
+              </Text>
+              <Textarea
+                onChange={(e) => setNoteURL(e.target.value)}
+                placeholder="https://example.com/docs"
+                rows={1}
+                value={noteURL}
+              />
+            </Box>
           </Dialog.Body>
 
           <Dialog.Footer>
@@ -307,8 +479,116 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
               <Button onClick={handleCloseModal} variant="outline">
                 Cancel
               </Button>
-              <Button colorPalette="blue" disabled={!noteText.trim()} onClick={handleSubmitNote}>
+              <Button
+                colorPalette="blue"
+                disabled={!noteText.trim() && !noteURL.trim()}
+                onClick={handleSubmitNote}
+              >
                 Save Note
+              </Button>
+            </HStack>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      <Dialog.Root onOpenChange={handleCloseKnowledgeModal} open={isKnowledgeModalOpen} size="md">
+        <Dialog.Content>
+          <Dialog.Header pb={4}>
+            <HStack gap={2} alignItems="center">
+              <FiBookOpen size={20} />
+              <Text fontSize="lg" fontWeight="bold">
+                Error Note
+              </Text>
+            </HStack>
+          </Dialog.Header>
+          <Dialog.CloseTrigger />
+
+          <Dialog.Body display="flex" flexDirection="column" gap={4}>
+            {/* Matched Error Section */}
+            <Box borderRadius="md" bg="gray.50" p={3}>
+              <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={2}>
+                Matched Error
+              </Text>
+              <Code
+                borderRadius="sm"
+                display="block"
+                fontSize="sm"
+                maxH="140px"
+                overflowY="auto"
+                p={2.5}
+                whiteSpace="pre-wrap"
+                wordBreak="break-word"
+                bg="white"
+                borderLeft="3px solid"
+                borderColor="red.400"
+              >
+                {activeMatchedNote?.highlightedText ?? "-"}
+              </Code>
+            </Box>
+
+            {/* Author & Metadata Row */}
+            <Box display="flex" gap={4}>
+              <Box flex={1}>
+                <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={1}>
+                  Author
+                </Text>
+                <Text fontSize="sm" fontWeight="medium">
+                  {activeMatchedNote?.author ?? "-"}
+                </Text>
+              </Box>
+              {activeMatchedLineIndex !== null ? (
+                <Box flex={1}>
+                  <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={1}>
+                    Log Line
+                  </Text>
+                  <Text fontSize="sm" fontWeight="medium">
+                    {activeMatchedLineIndex + 1}
+                  </Text>
+                </Box>
+              ) : null}
+            </Box>
+
+            {/* Note Content Section */}
+            <Box>
+              <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={2}>
+                Resolution
+              </Text>
+              <Text fontSize="sm" lineHeight="1.6" color="gray.800">
+                {activeMatchedNote?.noteText ?? "-"}
+              </Text>
+            </Box>
+
+            {/* Reference Documentation Section */}
+            {activeMatchedNote?.externalUrl ? (
+              <Box borderRadius="md" bg="blue.50" p={3} borderLeft="3px solid" borderColor="blue.400">
+                <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={2}>
+                  Reference Documentation
+                </Text>
+                <Text
+                  as="a"
+                  href={activeMatchedNote.externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  color="blue.600"
+                  fontSize="sm"
+                  fontWeight="medium"
+                  display="flex"
+                  alignItems="center"
+                  gap={1}
+                  _hover={{ textDecoration: "underline", opacity: 0.8 }}
+                  wordBreak="break-all"
+                >
+                  {activeMatchedNote.externalUrl}
+                  <FiExternalLink size={14} />
+                </Text>
+              </Box>
+            ) : null}
+          </Dialog.Body>
+
+          <Dialog.Footer pt={4} borderTop="1px solid" borderColor="gray.200">
+            <HStack gap={2} justifyContent="flex-end">
+              <Button onClick={handleCloseKnowledgeModal} variant="outline">
+                Close
               </Button>
             </HStack>
           </Dialog.Footer>
