@@ -964,7 +964,8 @@ python_files = [
 # use namespace packages effectively when collecting tests.
 pythonpath = [
     "airflow-core/src",
-    "airflow-core/tests"
+    "airflow-core/tests",
+    "devel-common/src",
 ]
 testpaths = [
     "tests",

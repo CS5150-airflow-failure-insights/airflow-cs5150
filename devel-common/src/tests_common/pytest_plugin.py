@@ -35,7 +35,16 @@ from unittest import mock
 
 import pytest
 import time_machine
-from _pytest.config.findpaths import ConfigValue
+try:
+    from _pytest.config.findpaths import ConfigValue
+except ImportError:  # pragma: no cover - fallback for pytest versions without ConfigValue
+    from dataclasses import dataclass
+
+    @dataclass
+    class ConfigValue:  # type: ignore[no-redef]
+        value: object
+        origin: str
+        mode: str
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -193,13 +202,20 @@ def _calculate_provider_deps_hash():
     return hasher.hexdigest()
 
 
-if not PROVIDER_DEPENDENCIES_JSON_PATH.exists() or not PROVIDER_DEPENDENCIES_JSON_HASH_PATH.exists():
-    subprocess.check_call(["uv", "run", UPDATE_PROVIDER_DEPENDENCIES_SCRIPT.as_posix()])
+_skip_provider_deps_update = os.environ.get("AIRFLOW_SKIP_PROVIDER_DEPENDENCIES_UPDATE") == "true"
+if _skip_provider_deps_update:
+    if not PROVIDER_DEPENDENCIES_JSON_PATH.exists():
+        PROVIDER_DEPENDENCIES_JSON_PATH.write_text("{}\n")
+    if not PROVIDER_DEPENDENCIES_JSON_HASH_PATH.exists():
+        PROVIDER_DEPENDENCIES_JSON_HASH_PATH.write_text(_calculate_provider_deps_hash())
 else:
-    calculated_provider_deps_hash = _calculate_provider_deps_hash()
-    if calculated_provider_deps_hash.strip() != PROVIDER_DEPENDENCIES_JSON_HASH_PATH.read_text().strip():
+    if not PROVIDER_DEPENDENCIES_JSON_PATH.exists() or not PROVIDER_DEPENDENCIES_JSON_HASH_PATH.exists():
         subprocess.check_call(["uv", "run", UPDATE_PROVIDER_DEPENDENCIES_SCRIPT.as_posix()])
-        PROVIDER_DEPENDENCIES_JSON_HASH_PATH.write_text(calculated_provider_deps_hash)
+    else:
+        calculated_provider_deps_hash = _calculate_provider_deps_hash()
+        if calculated_provider_deps_hash.strip() != PROVIDER_DEPENDENCIES_JSON_HASH_PATH.read_text().strip():
+            subprocess.check_call(["uv", "run", UPDATE_PROVIDER_DEPENDENCIES_SCRIPT.as_posix()])
+            PROVIDER_DEPENDENCIES_JSON_HASH_PATH.write_text(calculated_provider_deps_hash)
 # End of copied code from breeze
 
 os.environ["AIRFLOW__CORE__ALLOWED_DESERIALIZATION_CLASSES"] = "airflow.*\nunit.*\n"

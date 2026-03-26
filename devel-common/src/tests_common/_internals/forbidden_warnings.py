@@ -26,7 +26,16 @@ import pytest
 import yaml
 
 if TYPE_CHECKING:
-    from _pytest.config.findpaths import ConfigValue
+    try:
+        from _pytest.config.findpaths import ConfigValue
+    except ImportError:  # pragma: no cover - fallback for pytest versions without ConfigValue
+        from dataclasses import dataclass
+
+        @dataclass
+        class ConfigValue:  # type: ignore[no-redef]
+            value: object
+            origin: str
+            mode: str
 
 
 class ForbiddenWarningsPlugin:
