@@ -17,7 +17,9 @@
  * under the License.
  */
 import { Box, Code, VStack, IconButton, Textarea, Text, Button, HStack } from "@chakra-ui/react";
+import { useMutation } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import axios from "axios";
 import { useLayoutEffect, useRef, useState, useCallback } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
@@ -25,7 +27,7 @@ import { FiChevronDown, FiChevronUp, FiEdit2 } from "react-icons/fi";
 
 import { useAuthLinksServiceGetCurrentUserInfo } from "openapi/queries";
 import { ErrorAlert } from "src/components/ErrorAlert";
-import { Dialog, ProgressBar, Tooltip } from "src/components/ui";
+import { Dialog, ProgressBar, Tooltip, toaster } from "src/components/ui";
 import { getMetaKey } from "src/utils";
 
 import { scrollToBottom, scrollToTop } from "./utils";
@@ -91,6 +93,42 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const [noteText, setNoteText] = useState("");
   const { data: currentUser } = useAuthLinksServiceGetCurrentUserInfo();
 
+  const { isPending: isSavingNote, mutate: saveNote } = useMutation({
+    mutationFn: async ({
+      author,
+      highlightedText,
+      note,
+    }: {
+      author: string;
+      highlightedText: string;
+      note: string;
+    }) =>
+      axios.post("/ui/error-notes", {
+        author,
+        external_url: null,
+        highlighted_text: highlightedText,
+        note_text: note,
+      }),
+    onError: () => {
+      toaster.create({
+        description: "The note could not be saved.",
+        title: "Save failed",
+        type: "error",
+      });
+    },
+    onSuccess: () => {
+      toaster.create({
+        description: "The error note was saved.",
+        title: "Note saved",
+        type: "success",
+      });
+      setIsModalOpen(false);
+      setSelectedText("");
+      setNoteText("");
+      window.getSelection()?.removeAllRanges();
+    },
+  });
+
   const handleMouseUp = useCallback(() => {
     const selection = window.getSelection();
     const text = selection?.toString().trim() ?? "";
@@ -122,13 +160,24 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   };
 
   const handleSubmitNote = () => {
-    // TODO: replace this with a real API call to save the note to the backend
-    // eslint-disable-next-line no-console
-    console.log("Saving error note:", { note: noteText, selectedText, currentUser });
-    setIsModalOpen(false);
-    setSelectedText("");
-    setNoteText("");
-    window.getSelection()?.removeAllRanges();
+    const author = currentUser?.username?.trim();
+    const trimmedNote = noteText.trim();
+    const trimmedSelection = selectedText.trim();
+
+    if (!author || !trimmedNote || !trimmedSelection) {
+      toaster.create({
+        description: "Missing note text, selected log text, or user information.",
+        title: "Cannot save note",
+        type: "error",
+      });
+      return;
+    }
+
+    saveNote({
+      author,
+      highlightedText: trimmedSelection,
+      note: trimmedNote,
+    });
   };
 
   const handleCloseModal = () => {
@@ -307,7 +356,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
               <Button onClick={handleCloseModal} variant="outline">
                 Cancel
               </Button>
-              <Button colorPalette="blue" disabled={!noteText.trim()} onClick={handleSubmitNote}>
+              <Button colorPalette="blue" disabled={!noteText.trim() || isSavingNote} onClick={handleSubmitNote}>
                 Save Note
               </Button>
             </HStack>

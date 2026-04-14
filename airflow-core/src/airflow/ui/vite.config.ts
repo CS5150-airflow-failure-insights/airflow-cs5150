@@ -25,6 +25,11 @@ export default defineConfig({
   base: "./",
   build: { chunkSizeWarningLimit: 1600, manifest: true },
   plugins: [
+    {
+      apply: "serve",
+      name: "dev-base-href",
+      transformIndexHtml: (html) => html.replace(`href="{{ backend_server_base_url }}"`, `href="/"`),
+    },
     react({
       babel: {
         plugins: ["babel-plugin-react-compiler"],
@@ -41,6 +46,12 @@ export default defineConfig({
   resolve: { alias: { openapi: "/openapi-gen", src: "/src" } },
   server: {
     cors: true, // Only used by the dev server.
+    proxy: {
+      "/api": {
+        changeOrigin: true,
+        target: "http://localhost:8080",
+      },
+    },
   },
   test: {
     coverage: {
