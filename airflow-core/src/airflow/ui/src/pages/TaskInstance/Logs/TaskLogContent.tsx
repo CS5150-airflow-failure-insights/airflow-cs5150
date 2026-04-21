@@ -17,23 +17,20 @@
  * under the License.
  */
 import { Box, Code, VStack, IconButton, Textarea, Text, Button, HStack } from "@chakra-ui/react";
+import { useMutation } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import axios from "axios";
 import { isValidElement, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
 import { FiBookOpen, FiChevronDown, FiChevronUp, FiEdit2, FiTrash2, FiExternalLink } from "react-icons/fi";
 
-
-
 import { useAuthLinksServiceGetCurrentUserInfo } from "openapi/queries";
 import { ErrorAlert } from "src/components/ErrorAlert";
-import { Dialog, ProgressBar, Tooltip } from "src/components/ui";
+import { Dialog, ProgressBar, Tooltip, toaster } from "src/components/ui";
 import { getMetaKey } from "src/utils";
 
-
-
 import { scrollToBottom, scrollToTop } from "./utils";
-
 
 type Props = {
   readonly error: unknown;
@@ -170,6 +167,46 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const [noteURL, setNoteURL] = useState("");
   const { data: currentUser } = useAuthLinksServiceGetCurrentUserInfo();
 
+  // for get use axios.get("u"i/error-note/lookup")
+
+  const { isPending: isSavingNote, mutate: saveNote } = useMutation({
+    mutationFn: async ({
+      author,
+      highlightedText,
+      note,
+      external_url,
+    }: {
+      author: string;
+      highlightedText: string;
+      note: string;
+      external_url: string | null;
+    }) =>
+      axios.post("/ui/error-notes", {
+        author,
+        external_url: external_url,
+        highlighted_text: highlightedText,
+        note_text: note,
+      }),
+    onError: () => {
+      toaster.create({
+        description: "The note could not be saved.",
+        title: "Save failed",
+        type: "error",
+      });
+    },
+    onSuccess: () => {
+      toaster.create({
+        description: "The error note was saved.",
+        title: "Note saved",
+        type: "success",
+      });
+      setIsModalOpen(false);
+      setSelectedText("");
+      setNoteText("");
+      window.getSelection()?.removeAllRanges();
+    },
+  });
+
   const matchingNotesByLineIndex = useMemo(() => {
     // line index -> notes that match that line
     const matches = new Map<number, UiErrorNote[]>();
@@ -229,12 +266,31 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const handleSubmitNote = () => {
     // TODO: replace this with a real API call to save the note to the backend
     // eslint-disable-next-line no-console
-    console.log("Saving error note:", { note: noteText, selectedText, currentUser, url: noteURL });
-    setIsModalOpen(false);
-    setSelectedText("");
-    setNoteText("");
-    setNoteURL("");
-    window.getSelection()?.removeAllRanges();
+    // console.log("Saving error note:", { note: noteText, selectedText, currentUser, url: noteURL });
+    // setIsModalOpen(false);
+    // setSelectedText("");
+    // setNoteText("");
+    // setNoteURL("");
+    // window.getSelection()?.removeAllRanges();
+    const author = currentUser?.username?.trim();
+    const trimmedNote = noteText.trim();
+    const trimmedSelection = selectedText.trim();
+
+    if (!author || !trimmedNote || !trimmedSelection) {
+      toaster.create({
+        description: "Missing note text, selected log text, or user information.",
+        title: "Cannot save note",
+        type: "error",
+      });
+      return;
+    }
+
+    saveNote({
+      author,
+      highlightedText: trimmedSelection,
+      note: trimmedNote,
+      external_url: noteURL.trim() || null,
+    });
   };
 
   const handleCloseModal = () => {
@@ -284,7 +340,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   useHotkeys("mod+ArrowDown", () => handleScrollTo("bottom"), { enabled: !isLoading });
   useHotkeys("mod+ArrowUp", () => handleScrollTo("top"), { enabled: !isLoading });
 
-  // When multiple notes match the same line, we pick the best one to show in the tooltip/modal.  
+  // When multiple notes match the same line, we pick the best one to show in the tooltip/modal.
   const [activeMatchedNote, setActiveMatchedNote] = useState<UiErrorNote | null>(null);
   const [activeMatchedLineIndex, setActiveMatchedLineIndex] = useState<number | null>(null);
 
@@ -481,7 +537,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
               </Button>
               <Button
                 colorPalette="blue"
-                disabled={!noteText.trim() && !noteURL.trim()}
+                disabled={(!noteText.trim() && !noteURL.trim()) || isSavingNote}
                 onClick={handleSubmitNote}
               >
                 Save Note
