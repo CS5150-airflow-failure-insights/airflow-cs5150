@@ -16,21 +16,26 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { Box, Code, VStack, IconButton, Textarea, Text, Button, HStack } from "@chakra-ui/react";
+import { Box, Code, VStack, IconButton, Textarea, Text, Button, HStack, Link } from "@chakra-ui/react";
 import { useMutation } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import axios from "axios";
 import { isValidElement, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
-import { FiBookOpen, FiChevronDown, FiChevronUp, FiEdit2, FiTrash2, FiExternalLink } from "react-icons/fi";
+import { FiBookOpen, FiChevronDown, FiChevronUp, FiEdit2, FiExternalLink } from "react-icons/fi";
+
+
 
 import { useAuthLinksServiceGetCurrentUserInfo } from "openapi/queries";
 import { ErrorAlert } from "src/components/ErrorAlert";
 import { Dialog, ProgressBar, Tooltip, toaster } from "src/components/ui";
 import { getMetaKey } from "src/utils";
 
+
+
 import { scrollToBottom, scrollToTop } from "./utils";
+
 
 type Props = {
   readonly error: unknown;
@@ -40,13 +45,14 @@ type Props = {
   readonly wrap: boolean;
 };
 
-// TODO(backend): Define the shape of error notes returned by the API and replace this with a real type import.
+// Shape of error notes returned by the API (includes signature for regex matching)
 type UiErrorNote = {
-  id: number;
+  note_id: number;
   author: string;
-  highlightedText: string;
-  noteText: string;
-  externalUrl: string | null;
+  note_text: string;
+  external_url: string | null;
+  signature_regex: string; // for regex matching
+  signature_canonical: string; // what the error looks like
 };
 
 // TODO(backend): Replace all MOCK_* constants with a list of error-note records fetched from API.
@@ -85,13 +91,6 @@ const getLogEntryText = (entry: JSX.Element | string | undefined): string => {
 
   return extractTextFromNode(entry);
 };
-
-// Normalizes text so matching is stable across whitespace/newline differences in logs.
-const normalizeForMatch = (text: string): string =>
-  text
-    .toLowerCase()
-    .replace(/\s+/g, " ") // collapse whitespace/newlines/tabs
-    .trim();
 
 const ScrollToButton = ({
   direction,
@@ -140,23 +139,43 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const parentRef = useRef<HTMLDivElement | null>(null);
 
   // MOCK ERROR NOTES
-  const [notes, setNotes] = useState<UiErrorNote[]>([
-    {
-      id: 1,
-      author: "katie",
-      highlightedText:
-        "KeyError: 'SNOWFLAKE_ACCOUNT' File \".../airflow/models/variable.py\", line 176, in get raise KeyError(key) KeyError: 'SNOWFLAKE_ACCOUNT'",
-      noteText: "Example troubleshooting note 1.",
-      externalUrl: "https://airflow.apache.org/docs/apache-airflow/stable/howto/variable.html",
-    },
-    {
-      id: 2,
-      author: "admin",
-      highlightedText: `ERROR - sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) FATAL:  password authentication failed for user "analytics_user"`,
-      noteText: "Example troubleshooting note 2.",
-      externalUrl: "https://airflow.apache.org/docs/apache-airflow/stable/howto/variable.html",
-    },
-  ]);
+  // const [notes, setNotes] = useState<UiErrorNote[]>([
+  //   {
+  //     id: 1,
+  //     author: "katie",
+  //     highlightedText:
+  //       "KeyError: 'SNOWFLAKE_ACCOUNT' File \".../airflow/models/variable.py\", line 176, in get raise KeyError(key) KeyError: 'SNOWFLAKE_ACCOUNT'",
+  //     noteText: "Example troubleshooting note 1.",
+  //     externalUrl: "https://airflow.apache.org/docs/apache-airflow/stable/howto/variable.html",
+  //   },
+  //   {
+  //     id: 2,
+  //     author: "admin",
+  //     highlightedText: `ERROR - sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) FATAL:  password authentication failed for user "analytics_user"`,
+  //     noteText: "Example troubleshooting note 2.",
+  //     externalUrl: "https://airflow.apache.org/docs/apache-airflow/stable/howto/variable.html",
+  //   },
+  // ]);
+
+  // Error notes fetched from API
+  const [notes, setNotes] = useState<UiErrorNote[]>([]);
+
+  // Fetch error notes on component mount
+  useLayoutEffect(() => {
+    const fetchErrorNotes = async () => {
+      try {
+        const response = await axios.get("/ui/error-notes");
+        console.log("Fetched all error notes:", response.data);
+        if (response.data.notes) {
+          setNotes(response.data.notes);
+        }
+      } catch (error) {
+        console.error("Failed to fetch error notes:", error);
+      }
+    };
+
+    fetchErrorNotes();
+  }, []);
 
   // ── Annotate-on-highlight state ────────────────────────────────────────
   const [selectedText, setSelectedText] = useState<string>("");
@@ -166,8 +185,6 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const [noteText, setNoteText] = useState("");
   const [noteURL, setNoteURL] = useState("");
   const { data: currentUser } = useAuthLinksServiceGetCurrentUserInfo();
-
-  // for get use axios.get("u"i/error-note/lookup")
 
   const { isPending: isSavingNote, mutate: saveNote } = useMutation({
     mutationFn: async ({
@@ -208,22 +225,19 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   });
 
   const matchingNotesByLineIndex = useMemo(() => {
-    // line index -> notes that match that line
     const matches = new Map<number, UiErrorNote[]>();
 
-    const normalizedNotes = notes
-      .map((note) => ({
-        note,
-        normalizedHighlightedText: normalizeForMatch(note.highlightedText),
-      }))
-      .filter(({ normalizedHighlightedText }) => normalizedHighlightedText.length > 0);
-
     parsedLogs.forEach((entry, index) => {
-      const normalizedLine = normalizeForMatch(getLogEntryText(entry));
+      const logText = getLogEntryText(entry);
 
-      const matchedNotes = normalizedNotes
-        .filter(({ normalizedHighlightedText }) => normalizedLine.includes(normalizedHighlightedText))
-        .map(({ note }) => note);
+      const matchedNotes = notes.filter((note) => {
+        try {
+          const regex = new RegExp(note.signature_regex);
+          return regex.test(logText);
+        } catch (e) {
+          return false;
+        }
+      });
 
       if (matchedNotes.length > 0) {
         matches.set(index, matchedNotes);
@@ -349,11 +363,28 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
       return null;
     }
 
-    // Prefer the most specific signature (longest highlightedText).
-    const sorted = [...matchedNotes].sort((a, b) => b.highlightedText.length - a.highlightedText.length);
+    // Prefer the most specific signature (longest canonical form), with note_id as tiebreaker
+    const sorted = [...matchedNotes].sort((a, b) => {
+      const lengthDiff = b.signature_canonical.length - a.signature_canonical.length;
+      if (lengthDiff !== 0) return lengthDiff;
+      // If same length, prefer higher note_id (more recent)
+      return b.note_id - a.note_id;
+    });
 
-    return sorted[0] ?? null;
-  };
+    const bestNote = sorted[0];
+    if (matchedNotes.length > 1) {
+      console.log("Multiple notes matched. Picked most specific:", {
+        picked: bestNote,
+        allMatched: matchedNotes.map((n) => ({
+          note_id: n.note_id,
+          canonical_length: n.signature_canonical.length,
+          canonical: n.signature_canonical.substring(0, 60) + "...",
+        })),
+      });
+    }
+
+    return bestNote ?? null;
+  };;
 
   const handleOpenMatchedNote = (lineIndex: number) => {
     const matchedNotes = matchingNotesByLineIndex.get(lineIndex) ?? [];
@@ -578,7 +609,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 borderLeft="3px solid"
                 borderColor="red.400"
               >
-                {activeMatchedNote?.highlightedText ?? "-"}
+                {activeMatchedNote?.signature_canonical ?? "-"}
               </Code>
             </Box>
 
@@ -610,19 +641,18 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 Resolution
               </Text>
               <Text fontSize="sm" lineHeight="1.6" color="gray.800">
-                {activeMatchedNote?.noteText ?? "-"}
+                {activeMatchedNote?.note_text ?? "-"}
               </Text>
             </Box>
 
             {/* Reference Documentation Section */}
-            {activeMatchedNote?.externalUrl ? (
+            {activeMatchedNote?.external_url ? (
               <Box borderRadius="md" bg="blue.50" p={3} borderLeft="3px solid" borderColor="blue.400">
                 <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={2}>
                   Reference Documentation
                 </Text>
-                <Text
-                  as="a"
-                  href={activeMatchedNote.externalUrl}
+                <Link
+                  href={activeMatchedNote.external_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   color="blue.600"
@@ -634,9 +664,9 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                   _hover={{ textDecoration: "underline", opacity: 0.8 }}
                   wordBreak="break-all"
                 >
-                  {activeMatchedNote.externalUrl}
+                  {activeMatchedNote.external_url}
                   <FiExternalLink size={14} />
-                </Text>
+                </Link>
               </Box>
             ) : null}
           </Dialog.Body>
@@ -652,4 +682,4 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
       </Dialog.Root>
     </Box>
   );
-};
+};;;;
