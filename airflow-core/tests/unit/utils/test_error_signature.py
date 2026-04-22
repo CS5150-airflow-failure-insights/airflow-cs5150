@@ -22,6 +22,7 @@ from airflow.utils.error_signature import (
     create_signature_canonical,
     create_signature_hash,
     create_signature_regex,
+    create_signature_regex_from_highlighted_text,
 )
 
 
@@ -82,3 +83,11 @@ def test_regex_matches_equivalent_errors():
 
     assert re.search(regex, text_a)
     assert re.search(regex, text_b)
+
+
+def test_create_signature_regex_from_highlighted_text_matches_composed_pipeline():
+    text_a = "KeyError token_1111 at /tmp/run_2026.log"
+    text_b = "KeyError token_2222 at /tmp/run_2027.log"
+    expected = create_signature_regex(create_signature_canonical(text_a))
+    assert create_signature_regex_from_highlighted_text(text_a) == expected
+    assert re.search(create_signature_regex_from_highlighted_text(text_a), text_b)

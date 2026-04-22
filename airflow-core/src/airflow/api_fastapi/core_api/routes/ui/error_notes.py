@@ -26,12 +26,60 @@ from airflow.api_fastapi.core_api.datamodels.ui.error_notes import (
     ErrorNoteLookupBody,
     ErrorNotePatchBody,
     ErrorNoteResponse,
+    ErrorNoteWithSignatureCollectionResponse,
+    ErrorNoteWithSignatureResponse,
+    ErrorSignatureResolveBody,
+    ErrorSignatureResolveResponse,
 )
 from airflow.api_fastapi.core_api.openapi.exceptions import create_openapi_http_exception_doc
 from airflow.api_fastapi.core_api.security import requires_authenticated
 from airflow.api_fastapi.core_api.services.ui.error_notes import ErrorNotesService
+from airflow.models.error_note import ErrorNote
 
 error_notes_router = AirflowRouter(tags=["Error Note"], prefix="/error-notes")
+
+
+def _error_note_with_signature(note: ErrorNote) -> ErrorNoteWithSignatureResponse:
+    sig = note.signature
+    return ErrorNoteWithSignatureResponse(
+        note_id=note.id,
+        error_signature_id=note.signature_id,
+        author=note.author,
+        note_text=note.note_text,
+        external_url=note.external_url,
+        created_at=note.created_at,
+        updated_at=note.updated_at,
+        signature_canonical=sig.signature_canonical,
+        signature_regex=sig.signature_regex,
+    )
+
+
+@error_notes_router.get(
+    path="",
+    dependencies=[Depends(requires_authenticated())],
+)
+def list_all_error_notes_with_signatures(
+    session: SessionDep,
+) -> ErrorNoteWithSignatureCollectionResponse:
+    """Contract §6: all non-deleted notes with ``signature_regex`` / ``signature_canonical`` for log matching."""
+    notes = ErrorNotesService.list_all_notes_with_signatures(session=session)
+    rows = [_error_note_with_signature(n) for n in notes]
+    return ErrorNoteWithSignatureCollectionResponse(notes=rows, total_entries=len(rows))
+
+
+@error_notes_router.post(
+    path="/resolve-signature",
+    dependencies=[Depends(requires_authenticated())],
+)
+def resolve_error_signature(
+    body: ErrorSignatureResolveBody,
+    session: SessionDep,
+) -> ErrorSignatureResolveResponse:
+    """Contract §5: run the resolution pipeline and return ``error_signature_id`` (creates row if needed)."""
+    signature_id = ErrorNotesService.resolve_error_signature_id(
+        session=session, highlighted_text=body.highlighted_text
+    )
+    return ErrorSignatureResolveResponse(error_signature_id=signature_id)
 
 
 @error_notes_router.post(
@@ -43,6 +91,7 @@ def create_error_note(
     body: ErrorNoteCreateBody,
     session: SessionDep,
 ) -> ErrorNoteResponse:
+    """Contract §1: persist note linked to signature from ``airflow.utils.error_signature`` pipeline."""
     note = ErrorNotesService.create_note(
         session=session,
         highlighted_text=body.highlighted_text,
@@ -61,6 +110,7 @@ def lookup_error_notes(
     body: ErrorNoteLookupBody,
     session: SessionDep,
 ) -> ErrorNoteCollectionResponse:
+    """Contract §2: resolve ``highlighted_text`` to a signature, then return that signature's notes."""
     notes = ErrorNotesService.list_notes_for_highlighted_text(
         session=session, highlighted_text=body.highlighted_text
     )
@@ -77,6 +127,7 @@ def update_error_note(
     body: ErrorNotePatchBody,
     session: SessionDep,
 ) -> ErrorNoteResponse:
+    """Contract §3: update ``note_text`` for an existing note."""
     note = ErrorNotesService.update_note(session=session, note_id=note_id, note_text=body.note_text)
     if note is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Error note not found")
@@ -93,6 +144,7 @@ def delete_error_note(
     note_id: int,
     session: SessionDep,
 ) -> None:
+    """Contract §4: soft-delete (``is_deleted = true``)."""
     success = ErrorNotesService.soft_delete_note(session=session, note_id=note_id)
     if not success:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Error note not found")

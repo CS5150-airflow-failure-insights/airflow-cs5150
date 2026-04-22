@@ -34,6 +34,18 @@ class ErrorNoteLookupBody(StrictBaseModel):
     highlighted_text: str = Field(min_length=1)
 
 
+class ErrorSignatureResolveBody(StrictBaseModel):
+    """Body for the error signature resolution pipeline (contract §5)."""
+
+    highlighted_text: str = Field(min_length=1)
+
+
+class ErrorSignatureResolveResponse(BaseModel):
+    """Resolved persistent id after hash lookup and optional regex validation (contract §5)."""
+
+    error_signature_id: int
+
+
 class ErrorNotePatchBody(StrictBaseModel):
     note_text: str = Field(min_length=1)
 
@@ -50,4 +62,23 @@ class ErrorNoteResponse(BaseModel):
 
 class ErrorNoteCollectionResponse(BaseModel):
     notes: list[ErrorNoteResponse]
+    total_entries: int
+
+
+class ErrorNoteWithSignatureResponse(BaseModel):
+    """Non-deleted note with joined signature fields for client-side log matching (contract §6)."""
+
+    note_id: int
+    error_signature_id: int
+    author: str
+    note_text: str
+    external_url: str | None
+    created_at: datetime
+    updated_at: datetime
+    signature_canonical: str
+    signature_regex: str
+
+
+class ErrorNoteWithSignatureCollectionResponse(BaseModel):
+    notes: list[ErrorNoteWithSignatureResponse]
     total_entries: int
