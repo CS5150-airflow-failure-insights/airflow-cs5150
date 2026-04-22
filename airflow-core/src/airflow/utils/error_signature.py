@@ -72,6 +72,17 @@ def create_signature_regex(signature_canonical: str) -> str:
     return regex
 
 
+def create_signature_regex_from_highlighted_text(highlighted_text: str) -> str:
+    """
+    Build ``signature_regex`` from user-highlighted log text in one step.
+
+    Applies whitespace normalization, replaces run-specific tokens with placeholders
+    (UUID, timestamp, path, numeric noise while preserving HTTP status codes), then
+    substitutes safe regex fragments for each placeholder.
+    """
+    return create_signature_regex(create_signature_canonical(highlighted_text))
+
+
 def create_signature_hash(signature_canonical: str) -> str:
     """Create deterministic hash for fast signature lookup."""
     return hashlib.sha256(signature_canonical.encode("utf-8")).hexdigest()

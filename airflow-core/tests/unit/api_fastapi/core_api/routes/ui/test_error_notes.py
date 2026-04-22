@@ -16,11 +16,14 @@
 # under the License.
 from __future__ import annotations
 
+import re
+
 import pytest
 from sqlalchemy import delete, func, select
 
 from airflow.models.error_note import ErrorNote
 from airflow.models.error_signature import ErrorSignature
+from airflow.utils.error_signature import normalize_highlighted_text
 
 pytestmark = pytest.mark.db_test
 
@@ -279,4 +282,134 @@ class TestErrorNotesRoutes:
         )
 
         assert response.status_code == 201
-        assert response.json()["external_url"] is None    
+        assert response.json()["external_url"] is None
+
+    def test_resolve_signature_returns_id_and_matches_create(self, test_client):
+        text = "OSError errno 9999 path /tmp/run_2026.log"
+
+        resolve = test_client.post("/error-notes/resolve-signature", json={"highlighted_text": text})
+        assert resolve.status_code == 200
+        signature_id = resolve.json()["error_signature_id"]
+
+        create = test_client.post(
+            "/error-notes",
+            json={"highlighted_text": text, "author": "u", "note_text": "n"},
+        )
+        assert create.status_code == 201
+        assert create.json()["signature_id"] == signature_id
+
+        resolve_again = test_client.post("/error-notes/resolve-signature", json={"highlighted_text": text})
+        assert resolve_again.json()["error_signature_id"] == signature_id
+
+    def test_list_all_error_notes_with_signatures(self, test_client):
+        text = "TypeError bad op token_555 in /var/log/app.log"
+
+        create = test_client.post(
+            "/error-notes",
+            json={"highlighted_text": text, "author": "a", "note_text": "see wiki"},
+        )
+        assert create.status_code == 201
+        note_id = create.json()["note_id"]
+        signature_id = create.json()["signature_id"]
+
+        listing = test_client.get("/error-notes")
+        assert listing.status_code == 200
+        payload = listing.json()
+        assert payload["total_entries"] == 1
+        row = payload["notes"][0]
+        assert row["note_id"] == note_id
+        assert row["error_signature_id"] == signature_id
+        assert row["note_text"] == "see wiki"
+        assert "signature_regex" in row and row["signature_regex"]
+        assert "signature_canonical" in row and row["signature_canonical"]
+
+        test_client.delete(f"/error-notes/{note_id}")
+
+        empty = test_client.get("/error-notes")
+        assert empty.json()["total_entries"] == 0
+
+
+class TestAirflowInsightsDemoWalkthrough:
+    """
+    Runnable demo of the Insights API contract (list → resolve → create → bulk GET → patch → delete).
+
+    Run only this scenario::
+
+        uv run pytest airflow-core/tests/unit/api_fastapi/core_api/routes/ui/test_error_notes.py \\
+            -k TestAirflowInsightsDemoWalkthrough -vv
+    """
+
+    def test_demo_insights_contract_walkthrough(self, test_client):
+        # Same structural error on two "runs" (different token + path + layout).
+        highlight_run_a = "KeyError: 'token_4725' in\n  /Users/alice/airflow/dags/broken.py"
+        highlight_run_b = "KeyError: 'token_9321' in /Users/bob/airflow/dags/broken.py"
+
+        # §2 — List notes for this highlight (empty knowledge for this signature).
+        lookup_empty = test_client.post(
+            "/error-notes/lookup",
+            json={"highlighted_text": highlight_run_a},
+        )
+        assert lookup_empty.status_code == 200
+        assert lookup_empty.json() == {"notes": [], "total_entries": 0}
+
+        # §5 — Resolve signature id (normalize → canonical → regex + hash → find or insert).
+        resolve = test_client.post(
+            "/error-notes/resolve-signature",
+            json={"highlighted_text": highlight_run_a},
+        )
+        assert resolve.status_code == 200
+        signature_id = resolve.json()["error_signature_id"]
+
+        # §1 — Create documentation for that signature.
+        create = test_client.post(
+            "/error-notes",
+            json={
+                "highlighted_text": highlight_run_a,
+                "author": "demo-user",
+                "note_text": "Refresh the cache key; token_* is volatile.",
+                "external_url": "https://wiki.example/runbook/keyerror",
+            },
+        )
+        assert create.status_code == 201
+        note_id = create.json()["note_id"]
+        assert create.json()["signature_id"] == signature_id
+
+        # §2 again — Same error shape on another run should list the same note(s).
+        lookup_run_b = test_client.post(
+            "/error-notes/lookup",
+            json={"highlighted_text": highlight_run_b},
+        )
+        assert lookup_run_b.status_code == 200
+        assert lookup_run_b.json()["total_entries"] == 1
+        assert lookup_run_b.json()["notes"][0]["note_id"] == note_id
+
+        # §6 — Bulk feed for the task log UI: regex + canonical for client-side line matching.
+        bulk = test_client.get("/error-notes")
+        assert bulk.status_code == 200
+        rows = bulk.json()["notes"]
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["signature_regex"]
+        assert row["signature_canonical"]
+        fresh_log_line = normalize_highlighted_text(
+            "KeyError: 'token_0001' in /Users/charlie/airflow/dags/broken.py"
+        )
+        assert re.search(row["signature_regex"], fresh_log_line)
+
+        # §3 — Update note text.
+        patched = test_client.patch(
+            f"/error-notes/{note_id}",
+            json={"note_text": "Refresh cache key; see runbook (updated)."},
+        )
+        assert patched.status_code == 200
+        assert "updated" in patched.json()["note_text"].lower()
+
+        # §4 — Soft delete.
+        deleted = test_client.delete(f"/error-notes/{note_id}")
+        assert deleted.status_code == 204
+
+        lookup_after = test_client.post(
+            "/error-notes/lookup",
+            json={"highlighted_text": highlight_run_b},
+        )
+        assert lookup_after.json()["total_entries"] == 0
