@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 
 from sqlalchemy import and_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from airflow._shared.timezones import timezone
 from airflow.models.error_note import ErrorNote
@@ -27,20 +27,26 @@ from airflow.models.error_signature import ErrorSignature
 from airflow.utils.error_signature import (
     create_signature_canonical,
     create_signature_hash,
-    create_signature_regex,
+    create_signature_regex_from_highlighted_text,
     normalize_highlighted_text,
 )
 
 
 class ErrorNotesService:
-    """CRUD + signature-resolution service for error notes."""
+    """CRUD + signature-resolution service for error notes.
+
+    Resolution uses :mod:`airflow.utils.error_signature` (normalize → canonical →
+    ``signature_regex`` + ``signature_hash``) then persists or reuses
+    :class:`~airflow.models.error_signature.ErrorSignature` rows as described in the
+    Insights API contract.
+    """
 
     @staticmethod
     def resolve_error_signature_id(session: Session, highlighted_text: str) -> int:
         normalized_text = normalize_highlighted_text(highlighted_text)
         signature_canonical = create_signature_canonical(normalized_text)
         signature_hash = create_signature_hash(signature_canonical)
-        generated_regex = create_signature_regex(signature_canonical)
+        generated_regex = create_signature_regex_from_highlighted_text(normalized_text)
 
         candidates = session.scalars(
             select(ErrorSignature).where(
@@ -82,6 +88,24 @@ class ErrorNotesService:
         session.add(note)
         session.flush()
         return note
+
+    @staticmethod
+    def list_all_notes_with_signatures(session: Session) -> list[ErrorNote]:
+        """All non-deleted notes with joined active signatures (bulk log-matching feed)."""
+        return list(
+            session.scalars(
+                select(ErrorNote)
+                .options(joinedload(ErrorNote.signature))
+                .join(ErrorSignature, ErrorNote.signature_id == ErrorSignature.id)
+                .where(
+                    and_(
+                        ErrorNote.is_deleted.is_(False),
+                        ErrorSignature.is_active.is_(True),
+                    )
+                )
+                .order_by(ErrorNote.created_at.asc())
+            ).unique().all()
+        )
 
     @staticmethod
     def list_notes_for_highlighted_text(session: Session, highlighted_text: str) -> list[ErrorNote]:
