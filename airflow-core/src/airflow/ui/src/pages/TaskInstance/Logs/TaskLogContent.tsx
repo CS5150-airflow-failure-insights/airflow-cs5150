@@ -228,7 +228,9 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     const matches = new Map<number, UiErrorNote[]>();
 
     parsedLogs.forEach((entry, index) => {
-      const logText = getLogEntryText(entry);
+      // Normalize whitespace to match how signature_regex is built from the canonical form
+      // (normalize_highlighted_text collapses all whitespace including newlines to single spaces)
+      const logText = getLogEntryText(entry).replace(/\s+/g, " ").trim();
 
       const matchedNotes = notes.filter((note) => {
         try {
