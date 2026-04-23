@@ -30,11 +30,27 @@ HTTP_STATUS_PATTERN = re.compile(r"\bHTTP\s+([1-5]\d{2})\b", flags=re.IGNORECASE
 NUMBER_PATTERN = re.compile(r"\d+")
 
 PLACEHOLDER_REGEX = {
-    "<TS>": r"\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:\d{2})?)?",
     "<NUM>": r"\d+",
     "<PATH>": r"(?:(?:[A-Za-z]:\\)|/)[^\s:]+",
     "<UUID>": r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
 }
+
+
+def remove_timestamps(text: str) -> str:
+    """Remove timestamp patterns from text to ignore user/run-specific timing.
+
+    Removes timestamps in various formats including:
+    - Bracketed timestamps like [2026-04-20 13:03:56]
+    - Plain timestamps like 2026-04-20 13:03:56 or 2026-04-20T13:03:56
+    - ISO format with timezone
+    """
+    # Remove bracketed timestamps like [2026-04-20 13:03:56]
+    text = re.sub(r"\[\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:\d{2})?)?\]\s*", "", text)
+    # Remove plain timestamps (word-boundary protected)
+    text = TIMESTAMP_PATTERN.sub("", text)
+    # Clean up any resulting double spaces
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
 
 
 def normalize_highlighted_text(highlighted_text: str) -> str:
@@ -43,10 +59,14 @@ def normalize_highlighted_text(highlighted_text: str) -> str:
 
 
 def create_signature_canonical(highlighted_text: str) -> str:
-    """Create canonical signature by replacing run-specific values with placeholders."""
+    """Create canonical signature by replacing run-specific values with placeholders.
+
+    Removes timestamps entirely (not just as placeholders) since they are user/run-specific
+    and should not affect error matching across different runs and users.
+    """
     canonical = normalize_highlighted_text(highlighted_text)
+    canonical = remove_timestamps(canonical)
     canonical = UUID_PATTERN.sub("<UUID>", canonical)
-    canonical = TIMESTAMP_PATTERN.sub("<TS>", canonical)
     canonical = PATH_PATTERN.sub("<PATH>", canonical)
 
     # Keep HTTP status codes stable while replacing other numeric values.
@@ -76,9 +96,9 @@ def create_signature_regex_from_highlighted_text(highlighted_text: str) -> str:
     """
     Build ``signature_regex`` from user-highlighted log text in one step.
 
-    Applies whitespace normalization, replaces run-specific tokens with placeholders
-    (UUID, timestamp, path, numeric noise while preserving HTTP status codes), then
-    substitutes safe regex fragments for each placeholder.
+    Applies whitespace normalization, removes timestamps (which are user/run-specific),
+    replaces other run-specific tokens with placeholders (UUID, path, numeric noise while
+    preserving HTTP status codes), then substitutes safe regex fragments for each placeholder.
     """
     return create_signature_regex(create_signature_canonical(highlighted_text))
 

@@ -228,10 +228,17 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const matchingNotesByLineIndex = useMemo(() => {
     const matches = new Map<number, UiErrorNote[]>();
 
+    // Regex to match and remove timestamps from log entries (various formats)
+    // Matches: [2026-04-20 13:03:56], 2026-04-20 13:03:56, 2026-04-20T13:03:56, etc.
+    const timestampRegex =
+      /\[\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:\d{2})?)?\]\s*|\b\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:\d{2})?)?\b/g;
+
     parsedLogs.forEach((entry, index) => {
       // Normalize whitespace to match how signature_regex is built from the canonical form
       // (normalize_highlighted_text collapses all whitespace including newlines to single spaces)
-      const logText = getLogEntryText(entry).replace(/\s+/g, " ").trim();
+      let logText = getLogEntryText(entry).replace(/\s+/g, " ").trim();
+      // Remove timestamps from log text to match error notes (timestamps are stripped during signature creation)
+      logText = logText.replace(timestampRegex, "").replace(/\s+/g, " ").trim();
 
       const matchedNotes = notes.filter((note) => {
         try {
