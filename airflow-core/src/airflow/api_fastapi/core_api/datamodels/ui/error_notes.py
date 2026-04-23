@@ -25,7 +25,8 @@ from airflow.api_fastapi.core_api.base import BaseModel, StrictBaseModel
 
 class ErrorNoteCreateBody(StrictBaseModel):
     highlighted_text: str = Field(min_length=1)
-    author: str = Field(min_length=1, max_length=250)
+    # Kept optional for backward compatibility with existing clients, but ignored by the server.
+    author: str | None = Field(default=None, max_length=250)
     note_text: str = Field(min_length=1)
     external_url: str | None = None
 
@@ -48,6 +49,7 @@ class ErrorSignatureResolveResponse(BaseModel):
 
 class ErrorNotePatchBody(StrictBaseModel):
     note_text: str = Field(min_length=1)
+    external_url: str | None = None
 
 
 class ErrorNoteResponse(BaseModel):

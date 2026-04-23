@@ -32,8 +32,8 @@ from airflow.api_fastapi.core_api.datamodels.ui.error_notes import (
     ErrorSignatureResolveResponse,
 )
 from airflow.api_fastapi.core_api.openapi.exceptions import create_openapi_http_exception_doc
-from airflow.api_fastapi.core_api.security import requires_authenticated
-from airflow.api_fastapi.core_api.services.ui.error_notes import ErrorNotesService
+from airflow.api_fastapi.core_api.security import GetUserDep, requires_authenticated
+from airflow.api_fastapi.core_api.services.ui.error_notes import EXTERNAL_URL_UNSET, ErrorNotesService
 from airflow.models.error_note import ErrorNote
 
 error_notes_router = AirflowRouter(tags=["Error Note"], prefix="/error-notes")
@@ -90,12 +90,13 @@ def resolve_error_signature(
 def create_error_note(
     body: ErrorNoteCreateBody,
     session: SessionDep,
+    user: GetUserDep,
 ) -> ErrorNoteResponse:
     """Contract §1: persist note linked to signature from ``airflow.utils.error_signature`` pipeline."""
     note = ErrorNotesService.create_note(
         session=session,
         highlighted_text=body.highlighted_text,
-        author=body.author,
+        author=user.get_name(),
         note_text=body.note_text,
         external_url=body.external_url,
     )
@@ -119,16 +120,27 @@ def lookup_error_notes(
 
 @error_notes_router.patch(
     path="/{note_id}",
-    responses=create_openapi_http_exception_doc([status.HTTP_404_NOT_FOUND]),
+    responses=create_openapi_http_exception_doc([status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]),
     dependencies=[Depends(requires_authenticated())],
 )
 def update_error_note(
     note_id: int,
     body: ErrorNotePatchBody,
     session: SessionDep,
+    user: GetUserDep,
 ) -> ErrorNoteResponse:
     """Contract §3: update ``note_text`` for an existing note."""
-    note = ErrorNotesService.update_note(session=session, note_id=note_id, note_text=body.note_text)
+    try:
+        note = ErrorNotesService.update_note(
+            session=session,
+            note_id=note_id,
+            note_text=body.note_text,
+            editor=user.get_name(),
+            external_url=body.external_url if "external_url" in body.model_fields_set else EXTERNAL_URL_UNSET,
+        )
+    except PermissionError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the note author can edit this note")
+
     if note is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Error note not found")
     return note

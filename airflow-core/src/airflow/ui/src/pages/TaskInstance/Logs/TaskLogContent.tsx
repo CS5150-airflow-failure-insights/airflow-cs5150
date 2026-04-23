@@ -55,6 +55,8 @@ type UiErrorNote = {
   signature_canonical: string; // what the error looks like
 };
 
+type UiErrorNoteUpdate = Pick<UiErrorNote, "note_id" | "author" | "note_text" | "external_url">;
+
 // TODO(backend): Replace all MOCK_* constants with a list of error-note records fetched from API.
 // Expected future shape (example): { id, signature, triggerLine, matchedErrorText, author, description }
 
@@ -188,18 +190,15 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
 
   const { isPending: isSavingNote, mutate: saveNote } = useMutation({
     mutationFn: async ({
-      author,
       highlightedText,
       note,
       external_url,
     }: {
-      author: string;
       highlightedText: string;
       note: string;
       external_url: string | null;
     }) =>
       axios.post("/ui/error-notes", {
-        author,
         external_url: external_url,
         highlighted_text: highlightedText,
         note_text: note,
@@ -288,13 +287,12 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     // setNoteText("");
     // setNoteURL("");
     // window.getSelection()?.removeAllRanges();
-    const author = currentUser?.username?.trim();
     const trimmedNote = noteText.trim();
     const trimmedSelection = selectedText.trim();
 
-    if (!author || !trimmedNote || !trimmedSelection) {
+    if (!trimmedNote || !trimmedSelection) {
       toaster.create({
-        description: "Missing note text, selected log text, or user information.",
+        description: "Missing note text or selected log text.",
         title: "Cannot save note",
         type: "error",
       });
@@ -302,7 +300,6 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     }
 
     saveNote({
-      author,
       highlightedText: trimmedSelection,
       note: trimmedNote,
       external_url: noteURL.trim() || null,
@@ -359,6 +356,58 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   // When multiple notes match the same line, we pick the best one to show in the tooltip/modal.
   const [activeMatchedNote, setActiveMatchedNote] = useState<UiErrorNote | null>(null);
   const [activeMatchedLineIndex, setActiveMatchedLineIndex] = useState<number | null>(null);
+  const [isEditingMatchedNote, setIsEditingMatchedNote] = useState(false);
+  const [editedMatchedNoteText, setEditedMatchedNoteText] = useState("");
+  const [editedMatchedNoteUrl, setEditedMatchedNoteUrl] = useState("");
+  const currentUsername = currentUser?.username?.trim() ?? "";
+  const canEditActiveMatchedNote =
+    Boolean(currentUsername) &&
+    Boolean(activeMatchedNote?.author) &&
+    currentUsername === activeMatchedNote?.author;
+
+  const { isPending: isUpdatingMatchedNote, mutate: updateMatchedNote } = useMutation({
+    mutationFn: async ({
+      noteId,
+      noteText,
+      externalUrl,
+    }: {
+      noteId: number;
+      noteText: string;
+      externalUrl: string | null;
+    }) =>
+      axios.patch(`/ui/error-notes/${noteId}`, {
+        note_text: noteText,
+        external_url: externalUrl,
+      }),
+    onError: (error: unknown) => {
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      toaster.create({
+        description:
+          status === 403
+            ? "Only the note author can edit this note."
+            : "The note could not be updated.",
+        title: "Update failed",
+        type: "error",
+      });
+    },
+    onSuccess: (response) => {
+      const updatedNote = response.data as UiErrorNoteUpdate;
+      setNotes((existing) =>
+        existing.map((note) => (note.note_id === updatedNote.note_id ? { ...note, ...updatedNote } : note)),
+      );
+      setActiveMatchedNote((current) =>
+        current && current.note_id === updatedNote.note_id ? { ...current, ...updatedNote } : current,
+      );
+      setEditedMatchedNoteText(updatedNote.note_text);
+      setEditedMatchedNoteUrl(updatedNote.external_url ?? "");
+      setIsEditingMatchedNote(false);
+      toaster.create({
+        description: "The error note was updated.",
+        title: "Note updated",
+        type: "success",
+      });
+    },
+  });
 
   const pickBestMatchedNote = (matchedNotes: UiErrorNote[]): UiErrorNote | null => {
     if (matchedNotes.length === 0) {
@@ -398,6 +447,9 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
 
     setActiveMatchedLineIndex(lineIndex);
     setActiveMatchedNote(bestMatch);
+    setEditedMatchedNoteText(bestMatch.note_text);
+    setEditedMatchedNoteUrl(bestMatch.external_url ?? "");
+    setIsEditingMatchedNote(false);
     setIsKnowledgeModalOpen(true);
   };
 
@@ -405,6 +457,9 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     setIsKnowledgeModalOpen(false);
     setActiveMatchedLineIndex(null);
     setActiveMatchedNote(null);
+    setEditedMatchedNoteText("");
+    setEditedMatchedNoteUrl("");
+    setIsEditingMatchedNote(false);
   };
 
   return (
@@ -642,39 +697,95 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
               <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={2}>
                 Resolution
               </Text>
-              <Text fontSize="sm" lineHeight="1.6" color="gray.800">
-                {activeMatchedNote?.note_text ?? "-"}
-              </Text>
+              {isEditingMatchedNote ? (
+                <Textarea
+                  onChange={(event) => setEditedMatchedNoteText(event.target.value)}
+                  rows={5}
+                  value={editedMatchedNoteText}
+                />
+              ) : (
+                <Text fontSize="sm" lineHeight="1.6" color="gray.800">
+                  {activeMatchedNote?.note_text ?? "-"}
+                </Text>
+              )}
             </Box>
 
             {/* Reference Documentation Section */}
-            {activeMatchedNote?.external_url ? (
-              <Box borderRadius="md" bg="blue.50" p={3} borderLeft="3px solid" borderColor="blue.400">
-                <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={2}>
-                  Reference Documentation
+            <Box>
+              <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={2}>
+                Reference Documentation
+              </Text>
+              {isEditingMatchedNote ? (
+                <Textarea
+                  onChange={(event) => setEditedMatchedNoteUrl(event.target.value)}
+                  placeholder="https://example.com/docs"
+                  rows={1}
+                  value={editedMatchedNoteUrl}
+                />
+              ) : activeMatchedNote?.external_url ? (
+                <Box borderRadius="md" bg="blue.50" p={3} borderLeft="3px solid" borderColor="blue.400">
+                  <Link
+                    href={activeMatchedNote.external_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    color="blue.600"
+                    fontSize="sm"
+                    fontWeight="medium"
+                    display="flex"
+                    alignItems="center"
+                    gap={1}
+                    _hover={{ textDecoration: "underline", opacity: 0.8 }}
+                    wordBreak="break-all"
+                  >
+                    {activeMatchedNote.external_url}
+                    <FiExternalLink size={14} />
+                  </Link>
+                </Box>
+              ) : (
+                <Text fontSize="sm" color="gray.500">
+                  No reference documentation link.
                 </Text>
-                <Link
-                  href={activeMatchedNote.external_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  color="blue.600"
-                  fontSize="sm"
-                  fontWeight="medium"
-                  display="flex"
-                  alignItems="center"
-                  gap={1}
-                  _hover={{ textDecoration: "underline", opacity: 0.8 }}
-                  wordBreak="break-all"
-                >
-                  {activeMatchedNote.external_url}
-                  <FiExternalLink size={14} />
-                </Link>
-              </Box>
-            ) : null}
+              )}
+            </Box>
           </Dialog.Body>
 
           <Dialog.Footer pt={4} borderTop="1px solid" borderColor="gray.200">
             <HStack gap={2} justifyContent="flex-end">
+              {canEditActiveMatchedNote && !isEditingMatchedNote ? (
+                <Button onClick={() => setIsEditingMatchedNote(true)} variant="outline">
+                  Edit
+                </Button>
+              ) : null}
+              {canEditActiveMatchedNote && isEditingMatchedNote ? (
+                <Button
+                  colorPalette="blue"
+                  disabled={!editedMatchedNoteText.trim() || isUpdatingMatchedNote}
+                  onClick={() => {
+                    if (activeMatchedNote === null) {
+                      return;
+                    }
+                    updateMatchedNote({
+                      noteId: activeMatchedNote.note_id,
+                      noteText: editedMatchedNoteText.trim(),
+                      externalUrl: editedMatchedNoteUrl.trim() || null,
+                    });
+                  }}
+                >
+                  Save
+                </Button>
+              ) : null}
+              {canEditActiveMatchedNote && isEditingMatchedNote ? (
+                <Button
+                  onClick={() => {
+                    setEditedMatchedNoteText(activeMatchedNote?.note_text ?? "");
+                    setEditedMatchedNoteUrl(activeMatchedNote?.external_url ?? "");
+                    setIsEditingMatchedNote(false);
+                  }}
+                  variant="outline"
+                >
+                  Cancel Edit
+                </Button>
+              ) : null}
               <Button onClick={handleCloseKnowledgeModal} variant="outline">
                 Close
               </Button>

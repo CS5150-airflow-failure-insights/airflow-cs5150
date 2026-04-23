@@ -88,7 +88,7 @@ class TestErrorNotesRoutes:
             "/error-notes",
             json={
                 "highlighted_text": highlighted_text,
-                "author": "lms444",
+                "author": "test",
                 "note_text": "Likely stale token. Rotate secret and re-run.",
                 "external_url": "https://internal/wiki/token-runbook",
             },
@@ -148,6 +148,20 @@ class TestErrorNotesRoutes:
     def test_patch_missing_note_returns_404(self, test_client):
         response = test_client.patch("/error-notes/999999", json={"note_text": "new text"})
         assert response.status_code == 404
+
+    def test_patch_non_author_returns_403(self, test_client, unauthorized_test_client):
+        create_response = test_client.post(
+            "/error-notes",
+            json={
+                "highlighted_text": "KeyError token_1234",
+                "author": "someone_else",
+                "note_text": "original",
+            },
+        )
+        note_id = create_response.json()["note_id"]
+
+        response = unauthorized_test_client.patch(f"/error-notes/{note_id}", json={"note_text": "new text"})
+        assert response.status_code == 403
 
     def test_delete_missing_note_returns_404(self, test_client):
         response = test_client.delete("/error-notes/999999")
@@ -284,6 +298,32 @@ class TestErrorNotesRoutes:
         assert response.status_code == 201
         assert response.json()["external_url"] is None
 
+    def test_patch_can_add_or_update_external_url(self, test_client):
+        text = "ConnectionError token_778"
+
+        create_response = test_client.post(
+            "/error-notes",
+            json={
+                "highlighted_text": text,
+                "author": "ignored-by-server",
+                "note_text": "initial note",
+            },
+        )
+        assert create_response.status_code == 201
+        note_id = create_response.json()["note_id"]
+        assert create_response.json()["external_url"] is None
+
+        patch_response = test_client.patch(
+            f"/error-notes/{note_id}",
+            json={
+                "note_text": "updated note text",
+                "external_url": "https://docs.example.com/runbook",
+            },
+        )
+        assert patch_response.status_code == 200
+        assert patch_response.json()["note_text"] == "updated note text"
+        assert patch_response.json()["external_url"] == "https://docs.example.com/runbook"
+
     def test_resolve_signature_returns_id_and_matches_create(self, test_client):
         text = "OSError errno 9999 path /tmp/run_2026.log"
 
@@ -365,7 +405,7 @@ class TestAirflowInsightsDemoWalkthrough:
             "/error-notes",
             json={
                 "highlighted_text": highlight_run_a,
-                "author": "demo-user",
+                "author": "test",
                 "note_text": "Refresh the cache key; token_* is volatile.",
                 "external_url": "https://wiki.example/runbook/keyerror",
             },

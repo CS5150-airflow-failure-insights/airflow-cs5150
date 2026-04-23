@@ -31,6 +31,8 @@ from airflow.utils.error_signature import (
     normalize_highlighted_text,
 )
 
+EXTERNAL_URL_UNSET = object()
+
 
 class ErrorNotesService:
     """CRUD + signature-resolution service for error notes.
@@ -119,11 +121,21 @@ class ErrorNotesService:
         ).all()
 
     @staticmethod
-    def update_note(session: Session, note_id: int, note_text: str) -> ErrorNote | None:
+    def update_note(
+        session: Session,
+        note_id: int,
+        note_text: str,
+        editor: str,
+        external_url: str | None | object = EXTERNAL_URL_UNSET,
+    ) -> ErrorNote | None:
         note = session.scalar(select(ErrorNote).where(ErrorNote.id == note_id))
         if note is None or note.is_deleted:
             return None
+        if note.author != editor:
+            raise PermissionError("Only the note author can edit this note")
         note.note_text = note_text
+        if external_url is not EXTERNAL_URL_UNSET:
+            note.external_url = external_url
         note.updated_at = timezone.utcnow()
         session.flush()
         return note
