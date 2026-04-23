@@ -167,6 +167,20 @@ class TestErrorNotesRoutes:
         response = test_client.delete("/error-notes/999999")
         assert response.status_code == 404
 
+    def test_delete_non_author_returns_403(self, test_client, unauthorized_test_client):
+        create_response = test_client.post(
+            "/error-notes",
+            json={
+                "highlighted_text": "ValueError token_4321",
+                "author": "author_user",
+                "note_text": "to be deleted",
+            },
+        )
+        note_id = create_response.json()["note_id"]
+
+        response = unauthorized_test_client.delete(f"/error-notes/{note_id}")
+        assert response.status_code == 403
+
     def test_auth_required(self, unauthenticated_test_client):
         response = unauthenticated_test_client.post(
             "/error-notes/lookup", json={"highlighted_text": "KeyError: token_1111"}

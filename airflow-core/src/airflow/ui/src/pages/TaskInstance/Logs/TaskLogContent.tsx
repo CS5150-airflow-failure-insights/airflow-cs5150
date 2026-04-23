@@ -28,6 +28,7 @@ import { FiBookOpen, FiChevronDown, FiChevronUp, FiEdit2, FiExternalLink } from 
 
 
 import { useAuthLinksServiceGetCurrentUserInfo } from "openapi/queries";
+import DeleteDialog from "src/components/DeleteDialog";
 import { ErrorAlert } from "src/components/ErrorAlert";
 import { Dialog, ProgressBar, Tooltip, toaster } from "src/components/ui";
 import { getMetaKey } from "src/utils";
@@ -220,6 +221,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
       setSelectedText("");
       setNoteText("");
       window.getSelection()?.removeAllRanges();
+      window.location.reload();
     },
   });
 
@@ -357,6 +359,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   const [activeMatchedNote, setActiveMatchedNote] = useState<UiErrorNote | null>(null);
   const [activeMatchedLineIndex, setActiveMatchedLineIndex] = useState<number | null>(null);
   const [isEditingMatchedNote, setIsEditingMatchedNote] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [editedMatchedNoteText, setEditedMatchedNoteText] = useState("");
   const [editedMatchedNoteUrl, setEditedMatchedNoteUrl] = useState("");
   const currentUsername = currentUser?.username?.trim() ?? "";
@@ -406,6 +409,30 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
         title: "Note updated",
         type: "success",
       });
+      window.location.reload();
+    },
+  });
+
+  const { isPending: isDeletingMatchedNote, mutate: deleteMatchedNote } = useMutation({
+    mutationFn: async ({ noteId }: { noteId: number }) => axios.delete(`/ui/error-notes/${noteId}`),
+    onError: (error: unknown) => {
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      toaster.create({
+        description:
+          status === 403
+            ? "Only the note author can delete this note."
+            : "The note could not be deleted.",
+        title: "Delete failed",
+        type: "error",
+      });
+    },
+    onSuccess: () => {
+      toaster.create({
+        description: "The error note was deleted.",
+        title: "Note deleted",
+        type: "success",
+      });
+      window.location.reload();
     },
   });
 
@@ -460,6 +487,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     setEditedMatchedNoteText("");
     setEditedMatchedNoteUrl("");
     setIsEditingMatchedNote(false);
+    setIsDeleteConfirmOpen(false);
   };
 
   return (
@@ -759,7 +787,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
               {canEditActiveMatchedNote && isEditingMatchedNote ? (
                 <Button
                   colorPalette="blue"
-                  disabled={!editedMatchedNoteText.trim() || isUpdatingMatchedNote}
+                  disabled={!editedMatchedNoteText.trim() || isUpdatingMatchedNote || isDeletingMatchedNote}
                   onClick={() => {
                     if (activeMatchedNote === null) {
                       return;
@@ -776,6 +804,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
               ) : null}
               {canEditActiveMatchedNote && isEditingMatchedNote ? (
                 <Button
+                  disabled={isUpdatingMatchedNote || isDeletingMatchedNote}
                   onClick={() => {
                     setEditedMatchedNoteText(activeMatchedNote?.note_text ?? "");
                     setEditedMatchedNoteUrl(activeMatchedNote?.external_url ?? "");
@@ -786,6 +815,16 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                   Cancel Edit
                 </Button>
               ) : null}
+              {canEditActiveMatchedNote && !isEditingMatchedNote ? (
+                <Button
+                  colorPalette="red"
+                  disabled={isUpdatingMatchedNote || isDeletingMatchedNote}
+                  onClick={() => setIsDeleteConfirmOpen(true)}
+                  variant="outline"
+                >
+                  Delete
+                </Button>
+              ) : null}
               <Button onClick={handleCloseKnowledgeModal} variant="outline">
                 Close
               </Button>
@@ -793,6 +832,20 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
           </Dialog.Footer>
         </Dialog.Content>
       </Dialog.Root>
+      <DeleteDialog
+        isDeleting={isDeletingMatchedNote}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onDelete={() => {
+          if (activeMatchedNote === null) {
+            return;
+          }
+          deleteMatchedNote({ noteId: activeMatchedNote.note_id });
+        }}
+        open={isDeleteConfirmOpen}
+        resourceName="error note"
+        title="Delete Error Note"
+        warningText="This action cannot be undone."
+      />
     </Box>
   );
 };;;;

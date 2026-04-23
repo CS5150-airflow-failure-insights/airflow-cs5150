@@ -149,14 +149,21 @@ def update_error_note(
 @error_notes_router.delete(
     path="/{note_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=create_openapi_http_exception_doc([status.HTTP_404_NOT_FOUND]),
+    responses=create_openapi_http_exception_doc([status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]),
     dependencies=[Depends(requires_authenticated())],
 )
 def delete_error_note(
     note_id: int,
     session: SessionDep,
+    user: GetUserDep,
 ) -> None:
     """Contract §4: soft-delete (``is_deleted = true``)."""
-    success = ErrorNotesService.soft_delete_note(session=session, note_id=note_id)
+    try:
+        success = ErrorNotesService.soft_delete_note_as_author(
+            session=session, note_id=note_id, editor=user.get_name()
+        )
+    except PermissionError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the note author can delete this note")
+
     if not success:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Error note not found")

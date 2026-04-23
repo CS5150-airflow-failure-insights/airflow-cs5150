@@ -149,3 +149,15 @@ class ErrorNotesService:
         note.updated_at = timezone.utcnow()
         session.flush()
         return True
+
+    @staticmethod
+    def soft_delete_note_as_author(session: Session, note_id: int, editor: str) -> bool:
+        note = session.scalar(select(ErrorNote).where(ErrorNote.id == note_id))
+        if note is None or note.is_deleted:
+            return False
+        if note.author != editor:
+            raise PermissionError("Only the note author can delete this note")
+        note.is_deleted = True
+        note.updated_at = timezone.utcnow()
+        session.flush()
+        return True
