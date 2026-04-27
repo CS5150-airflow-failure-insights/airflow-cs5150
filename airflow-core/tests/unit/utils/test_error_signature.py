@@ -34,10 +34,13 @@ def test_canonicalization_replaces_run_specific_tokens():
         "run_id=1c5e3888-faf8-4f4c-9f88-6fbf8f9d2f5f"
     )
     canonical = create_signature_canonical(text)
-    assert "<TS>" in canonical
     assert "<PATH>" in canonical
     assert "<UUID>" in canonical
     assert "token_<NUM>" in canonical
+    # Timestamps should be removed entirely (not kept as placeholders)
+    assert "<TS>" not in canonical
+    assert "2026" not in canonical
+    assert "17:54:57" not in canonical
 
 
 def test_http_status_code_is_not_normalized():
@@ -70,7 +73,28 @@ def test_uuid_normalization():
 def test_timestamp_normalization():
     text = "2026-03-03 14:22:10 ERROR something failed"
     canonical = create_signature_canonical(text)
-    assert "<TS>" in canonical
+    # Timestamps should be completely removed, not converted to placeholders
+    assert "<TS>" not in canonical
+    assert "2026" not in canonical
+    assert canonical == "ERROR something failed"
+
+
+def test_multiline_with_multiple_timestamps():
+    """Test that multi-line text with multiple timestamps is normalized correctly."""
+    text = """[2026-04-20 13:03:56] INFO - Checking Variable: SNOWFLAKE_WAREHOUSE ... found
+[2026-04-20 13:03:56] INFO - Checking Variable: SNOWFLAKE_ACCOUNT ..."""
+    canonical = create_signature_canonical(text)
+    # All timestamps should be removed
+    assert "2026" not in canonical
+    assert "13:03:56" not in canonical
+    # The actual error content should remain
+    assert "SNOWFLAKE_WAREHOUSE" in canonical
+    assert "SNOWFLAKE_ACCOUNT" in canonical
+    # Should match another similar error with different timestamps
+    other_text = """[2026-04-22 13:03:59] INFO - Checking Variable: SNOWFLAKE_WAREHOUSE ... found
+[2026-04-22 13:04:01] INFO - Checking Variable: SNOWFLAKE_ACCOUNT ..."""
+    other_canonical = create_signature_canonical(other_text)
+    assert canonical == other_canonical
 
 
 def test_path_normalization():
