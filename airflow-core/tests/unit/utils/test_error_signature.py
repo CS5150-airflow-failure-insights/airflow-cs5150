@@ -23,6 +23,7 @@ from airflow.utils.error_signature import (
     create_signature_hash,
     create_signature_regex,
     create_signature_regex_from_highlighted_text,
+    normalize_highlighted_text,
 )
 
 
@@ -59,20 +60,24 @@ def test_regex_and_hash_are_deterministic():
     assert re.search(regex, text_a)
     assert re.search(regex, text_b)
 
+
 def test_uuid_normalization():
     text = "run_id=123e4567-e89b-12d3-a456-426614174000"
     canonical = create_signature_canonical(text)
-    assert "<UUID>" in canonical    
+    assert "<UUID>" in canonical
+
 
 def test_timestamp_normalization():
     text = "2026-03-03 14:22:10 ERROR something failed"
     canonical = create_signature_canonical(text)
     assert "<TS>" in canonical
 
+
 def test_path_normalization():
     text = 'File "/Users/test/project/file.py", line 12'
     canonical = create_signature_canonical(text)
     assert "<PATH>" in canonical
+
 
 def test_regex_matches_equivalent_errors():
     text_a = "KeyError token_1111 at /tmp/run_2026.log"
@@ -91,3 +96,36 @@ def test_create_signature_regex_from_highlighted_text_matches_composed_pipeline(
     expected = create_signature_regex(create_signature_canonical(text_a))
     assert create_signature_regex_from_highlighted_text(text_a) == expected
     assert re.search(create_signature_regex_from_highlighted_text(text_a), text_b)
+
+
+def test_normalize_highlighted_text_collapses_whitespace():
+    assert normalize_highlighted_text("  KeyError:\n  token_123\t at /tmp/file.log  ") == (
+        "KeyError: token_123 at /tmp/file.log"
+    )
+
+
+def test_http_status_normalization_is_case_insensitive_and_preserves_each_code():
+    text = "http 500 on /api/foo then HTTP 404 after 3 retries"
+    canonical = create_signature_canonical(text)
+    assert "HTTP 500" in canonical
+    assert "HTTP 404" in canonical
+    assert "after <NUM> retries" in canonical
+
+
+def test_timestamp_and_windows_path_normalization():
+    text = (
+        r"2026-03-03T14:22:10.123+05:30 ERROR "
+        r"at C:\Users\alice\airflow\dags\broken.py line 47"
+    )
+    canonical = create_signature_canonical(text)
+    assert "<TS>" in canonical
+    assert "<PATH>" in canonical
+    assert "line <NUM>" in canonical
+
+
+def test_signature_regex_escapes_literal_regex_chars():
+    template_text = r"Error [worker-1] (code=17) path=/tmp/a+b.py"
+    candidate_text = r"Error [worker-2] (code=99) path=/tmp/a+b.py"
+
+    regex = create_signature_regex(create_signature_canonical(template_text))
+    assert re.search(regex, candidate_text)
