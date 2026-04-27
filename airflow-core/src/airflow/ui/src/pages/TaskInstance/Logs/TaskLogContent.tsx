@@ -71,7 +71,17 @@ const extractTextFromNode = (node: unknown): string => {
   }
 
   if (Array.isArray(node)) {
-    return node.map((child) => extractTextFromNode(child)).join("");
+    const parts = node
+      .map((child) => extractTextFromNode(child))
+      .filter((text) => text.length > 0);
+
+    const result = parts.reduce((acc, part, i) => {
+      if (i === 0) return part;
+      // Don't add space before punctuation
+      const startsWithPunctuation = /^[.:,!?;)\]}]/.test(part);
+      return acc + (startsWithPunctuation ? "" : " ") + part;
+    }, "");
+    return result;
   }
 
   if (!isValidElement(node)) {
@@ -168,12 +178,11 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     const fetchErrorNotes = async () => {
       try {
         const response = await axios.get("/ui/error-notes");
-        console.log("Fetched all error notes:", response.data);
         if (response.data.notes) {
           setNotes(response.data.notes);
         }
       } catch (error) {
-        console.error("Failed to fetch error notes:", error);
+        // Failed to fetch error notes, continue with empty list
       }
     };
 
@@ -234,16 +243,30 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
       /\[\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:\d{2})?)?\]\s*|\b\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:\d{2})?)?\b/g;
 
     parsedLogs.forEach((entry, index) => {
-      // Normalize whitespace to match how signature_regex is built from the canonical form
-      // (normalize_highlighted_text collapses all whitespace including newlines to single spaces)
-      let logText = getLogEntryText(entry).replace(/\s+/g, " ").trim();
+      const rawText = getLogEntryText(entry);
+      let cleanText = rawText.replace(/^\d+\s*\[\s*\]\s*/, "");
+      let logText = cleanText.replace(/\s+/g, " ").trim();
+
       // Remove timestamps from log text to match error notes (timestamps are stripped during signature creation)
       logText = logText.replace(timestampRegex, "").replace(/\s+/g, " ").trim();
 
       const matchedNotes = notes.filter((note) => {
         try {
           const regex = new RegExp(note.signature_regex);
-          return regex.test(logText);
+          let testResult = regex.test(logText);
+
+          // If no match and the regex starts with escaped punctuation (like \]),
+          // try matching without that leading punctuation (handles selection artifacts)
+          if (!testResult && /^\\[\\.\[\](){}\-+*?^$|]/.test(note.signature_regex.substring(0, 3))) {
+            // Remove leading escaped punctuation from regex pattern
+            const cleanedRegexPattern = note.signature_regex.replace(/^\\[\\.\[\](){}\-+*?^$|]+/, "");
+            if (cleanedRegexPattern && cleanedRegexPattern !== note.signature_regex) {
+              const cleanedRegex = new RegExp(cleanedRegexPattern);
+              testResult = cleanedRegex.test(logText);
+            }
+          }
+
+          return testResult;
         } catch (e) {
           return false;
         }
@@ -278,7 +301,9 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     // Check that selection is within a single log line (same data-index)
     // Find the log line container for the start and end of the selection
     const getLogLineIndex = (node: Node): string | null => {
-      let current: Node | null = node;
+      // Start from the node - if it's a text node, use its parent
+      let current: Node | null = node.nodeType === Node.TEXT_NODE ? node.parentNode : node;
+
       while (current && current !== parentRef.current) {
         if (current.nodeType === Node.ELEMENT_NODE) {
           const element = current as Element;
@@ -295,8 +320,15 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     const startIndex = getLogLineIndex(range.startContainer);
     const endIndex = getLogLineIndex(range.endContainer);
 
-    // Reject selection that spans multiple log lines
-    if (startIndex === null || endIndex === null || startIndex !== endIndex) {
+    // Handle three cases:
+    // 1. Both found with same index - allow (normal case)
+    // 2. Both found with different index - reject (crosses log lines)
+    // 3. One or both null - allow if within container (likely nested in link/element without data-index)
+    const bothFoundAndDifferent = startIndex !== null && endIndex !== null && startIndex !== endIndex;
+    const neitherFound = startIndex === null && endIndex === null;
+    const shouldAllow = !bothFoundAndDifferent;
+
+    if (!shouldAllow) {
       setButtonPos(null);
       setSelectedText("");
       toaster.create({
@@ -308,7 +340,19 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     }
 
     const rect = range.getBoundingClientRect();
-    setButtonPos({ x: rect.right + 6, y: rect.top - 4 });
+
+    // Position the button near the end of selection, but keep it visible in viewport
+    let buttonX = rect.right + 6;
+    const viewportWidth = window.innerWidth;
+    const buttonWidth = 32; // Approximate width of the icon button
+    const rightMargin = 10;
+
+    // If button would go off-screen to the right, position it at the left side instead
+    if (buttonX + buttonWidth > viewportWidth - rightMargin) {
+      buttonX = Math.max(10, rect.left - buttonWidth - 6);
+    }
+
+    setButtonPos({ x: buttonX, y: rect.top - 4 });
     setSelectedText(text);
   }, []);
 
@@ -320,16 +364,11 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
   };
 
   const handleSubmitNote = () => {
-    // TODO: replace this with a real API call to save the note to the backend
-    // eslint-disable-next-line no-console
-    // console.log("Saving error note:", { note: noteText, selectedText, currentUser, url: noteURL });
-    // setIsModalOpen(false);
-    // setSelectedText("");
-    // setNoteText("");
-    // setNoteURL("");
-    // window.getSelection()?.removeAllRanges();
     const trimmedNote = noteText.trim();
-    const trimmedSelection = selectedText.trim();
+    let trimmedSelection = selectedText.trim();
+
+    // Strip line number and bracket prefix from selection (e.g., "11 [ ]")
+    trimmedSelection = trimmedSelection.replace(/^\d+\s*\[\s*\]\s*/, "");
 
     if (!trimmedNote || !trimmedSelection) {
       toaster.create({
@@ -484,24 +523,11 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     const sorted = [...matchedNotes].sort((a, b) => {
       const lengthDiff = b.signature_canonical.length - a.signature_canonical.length;
       if (lengthDiff !== 0) return lengthDiff;
-      // If same length, prefer higher note_id (more recent)
       return b.note_id - a.note_id;
     });
 
-    const bestNote = sorted[0];
-    if (matchedNotes.length > 1) {
-      console.log("Multiple notes matched. Picked most specific:", {
-        picked: bestNote,
-        allMatched: matchedNotes.map((n) => ({
-          note_id: n.note_id,
-          canonical_length: n.signature_canonical.length,
-          canonical: n.signature_canonical.substring(0, 60) + "...",
-        })),
-      });
-    }
-
-    return bestNote ?? null;
-  };;
+    return sorted[0] ?? null;
+  }
 
   const handleOpenMatchedNote = (lineIndex: number) => {
     const matchedNotes = matchingNotesByLineIndex.get(lineIndex) ?? [];
@@ -887,4 +913,4 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
       />
     </Box>
   );
-};;;;
+}
