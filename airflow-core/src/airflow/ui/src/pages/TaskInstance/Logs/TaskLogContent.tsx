@@ -559,6 +559,9 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     <Box display="flex" flexDirection="column" flexGrow={1} h="100%" minHeight={0} position="relative">
       <ErrorAlert error={error ?? logError} />
       <ProgressBar size="xs" visibility={isLoading ? "visible" : "hidden"} />
+      <Box px={3} py={2} bg="gray.50" fontSize="xs" color="gray.600" borderBottom="1px solid" borderColor="gray.200">
+        💡 Highlight any log line to add an error note for your team
+      </Box>
       <Box
         data-testid="virtual-scroll-container"
         flexGrow={1}
@@ -589,6 +592,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
               <Box
                 _ltr={{ left: 0, right: "auto" }}
                 _rtl={{ left: "auto", right: 0 }}
+                _hover={{ bg: "blue.50", cursor: "text" }}
                 bgColor={
                   Boolean(hash) && virtualRow.index === Number(hash) - 1 ? "brand.emphasized" : "transparent"
                 }
@@ -603,21 +607,30 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
               >
                 <HStack alignItems="flex-start" gap={0}>
                   {(matchingNotesByLineIndex.get(virtualRow.index)?.length ?? 0) > 0 ? (
-                    <Tooltip content="View error note" openDelay={100}>
-                      <IconButton
-                        aria-label="View error note"
-                        colorPalette="blue"
-                        h="16px"
-                        minW="16px"
+                    <Tooltip content="View error note (Fix available)" openDelay={100}>
+                      <Box
+                        as="button"
                         onClick={() => handleOpenMatchedNote(virtualRow.index)}
-                        px={0}
-                        size="2xs"
+                        display="inline-flex"
+                        alignItems="center"
+                        gap={0.5}
+                        px={1}
+                        py={0}
+                        mr={0}
+                        bg="blue.100"
+                        borderRadius="xs"
+                        fontSize="2xs"
+                        fontWeight="semibold"
+                        color="blue.700"
+                        border="none"
+                        cursor="pointer"
+                        _hover={{ bg: "blue.200" }}
+                        _active={{ bg: "blue.300" }}
                         title="View error note"
-                        variant="ghost"
-                        w="16px"
                       >
-                        <FiBookOpen />
-                      </IconButton>
+                        <FiBookOpen size={12} />
+                        <Text fontSize="2xs">Fix</Text>
+                      </Box>
                     </Tooltip>
                   ) : undefined}
                   <Box>{parsedLogs[virtualRow.index] ?? undefined}</Box>
