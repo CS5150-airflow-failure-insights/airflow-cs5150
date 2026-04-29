@@ -607,8 +607,9 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
               >
                 <HStack alignItems="flex-start" gap={0}>
                   {(matchingNotesByLineIndex.get(virtualRow.index)?.length ?? 0) > 0 ? (
-                    <Tooltip content="View error note (Fix available)" openDelay={100}>
-                      <Box
+                    <Box position="relative" zIndex={10} color="white">
+                      <Tooltip content="View Error Note" openDelay={100} portalled>
+                        <Box
                         as="button"
                         onClick={() => handleOpenMatchedNote(virtualRow.index)}
                         display="inline-flex"
@@ -617,21 +618,22 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                         px={1}
                         py={0}
                         mr={0}
-                        bg="blue.100"
+                        bg="red.100"
                         borderRadius="xs"
                         fontSize="2xs"
                         fontWeight="semibold"
-                        color="blue.700"
+                        color="red.700"
                         border="none"
                         cursor="pointer"
-                        _hover={{ bg: "blue.200" }}
-                        _active={{ bg: "blue.300" }}
+                        _hover={{ bg: "red.200" }}
+                        _active={{ bg: "red.300" }}
                         title="View error note"
                       >
                         <FiBookOpen size={12} />
                         <Text fontSize="2xs">Fix</Text>
                       </Box>
-                    </Tooltip>
+                      </Tooltip>
+                    </Box>
                   ) : undefined}
                   <Box>{parsedLogs[virtualRow.index] ?? undefined}</Box>
                 </HStack>
