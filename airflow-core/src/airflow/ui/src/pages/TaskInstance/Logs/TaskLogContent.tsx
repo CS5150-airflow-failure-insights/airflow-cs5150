@@ -592,9 +592,13 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
               <Box
                 _ltr={{ left: 0, right: "auto" }}
                 _rtl={{ left: "auto", right: 0 }}
-                _hover={{ bg: "blue.50", cursor: "text" }}
+                _hover={{ bg: "orange.50", cursor: "text" }}
                 bgColor={
-                  Boolean(hash) && virtualRow.index === Number(hash) - 1 ? "brand.emphasized" : "transparent"
+                  Boolean(hash) && virtualRow.index === Number(hash) - 1
+                    ? "brand.emphasized"
+                    : (matchingNotesByLineIndex.get(virtualRow.index)?.length ?? 0) > 0
+                      ? "orange.50"
+                      : "transparent"
                 }
                 data-index={virtualRow.index}
                 data-testid={`virtualized-item-${virtualRow.index}`}
@@ -605,33 +609,32 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 transform={`translateY(${virtualRow.start}px)`}
                 width={wrap ? "100%" : "max-content"}
               >
-                <HStack alignItems="flex-start" gap={0}>
+                <HStack alignItems="center" gap={0}>
                   {(matchingNotesByLineIndex.get(virtualRow.index)?.length ?? 0) > 0 ? (
-                    <Box position="relative" zIndex={10} color="white">
+                    <Box position="relative" zIndex={10} display="flex" alignItems="center">
                       <Tooltip content="View Error Note" openDelay={100} portalled>
                         <Box
-                        as="button"
-                        onClick={() => handleOpenMatchedNote(virtualRow.index)}
-                        display="inline-flex"
-                        alignItems="center"
-                        gap={0.5}
-                        px={1}
-                        py={0}
-                        mr={0}
-                        bg="red.100"
-                        borderRadius="xs"
-                        fontSize="2xs"
-                        fontWeight="semibold"
-                        color="red.700"
-                        border="none"
-                        cursor="pointer"
-                        _hover={{ bg: "red.200" }}
-                        _active={{ bg: "red.300" }}
-                        title="View error note"
-                      >
-                        <FiBookOpen size={12} />
-                        <Text fontSize="2xs">Fix</Text>
-                      </Box>
+                          as="button"
+                          onClick={() => handleOpenMatchedNote(virtualRow.index)}
+                          display="inline-flex"
+                          alignItems="center"
+                          justifyContent="center"
+                          gap={1}
+                          mr={0.5}
+                          pl={0.5}
+                          fontSize="xs"
+                          fontWeight="semibold"
+                          color="orange.600"
+                          border="none"
+                          bg="transparent"
+                          cursor="pointer"
+                          _hover={{ color: "orange.700" }}
+                          _active={{ color: "orange.800" }}
+                          title="View error note"
+                        >
+                          <FiBookOpen size={12} />
+                          <Text fontSize="3xs">Fix</Text>
+                        </Box>
                       </Tooltip>
                     </Box>
                   ) : undefined}
