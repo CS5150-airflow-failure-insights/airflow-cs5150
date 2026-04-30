@@ -544,6 +544,22 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     setIsKnowledgeModalOpen(true);
   };
 
+  // Click handler for a log row that ignores clicks which are part of a text selection
+  const handleRowClick = (lineIndex: number) => {
+    try {
+      const selection = window.getSelection?.();
+      const selText = selection?.toString().trim() ?? "";
+      if (selText.length > 0) {
+        // User is selecting text — do not open the matched-note modal.
+        return;
+      }
+    } catch (e) {
+      // If selection API throws (rare), fall back to opening the note.
+    }
+
+    handleOpenMatchedNote(lineIndex);
+  };
+
   const handleCloseKnowledgeModal = () => {
     setIsKnowledgeModalOpen(false);
     setActiveMatchedLineIndex(null);
@@ -605,8 +621,8 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 cursor={hasMatchedNote ? "pointer" : undefined}
                 data-index={virtualRow.index}
                 data-testid={`virtualized-item-${virtualRow.index}`}
-                key={virtualRow.key}
-                onClick={hasMatchedNote ? () => handleOpenMatchedNote(virtualRow.index) : undefined}
+                  key={virtualRow.key}
+                  onClick={hasMatchedNote ? () => handleRowClick(virtualRow.index) : undefined}
                 position="absolute"
                 ref={rowVirtualizer.measureElement}
                 role={hasMatchedNote ? "button" : undefined}
