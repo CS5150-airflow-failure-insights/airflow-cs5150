@@ -325,7 +325,6 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     // 2. Both found with different index - reject (crosses log lines)
     // 3. One or both null - allow if within container (likely nested in link/element without data-index)
     const bothFoundAndDifferent = startIndex !== null && endIndex !== null && startIndex !== endIndex;
-    const neitherFound = startIndex === null && endIndex === null;
     const shouldAllow = !bothFoundAndDifferent;
 
     if (!shouldAllow) {
@@ -559,6 +558,9 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     <Box display="flex" flexDirection="column" flexGrow={1} h="100%" minHeight={0} position="relative">
       <ErrorAlert error={error ?? logError} />
       <ProgressBar size="xs" visibility={isLoading ? "visible" : "hidden"} />
+      <Box px={3} py={2} bg="gray.50" fontSize="xs" color="gray.600" borderBottom="1px solid" borderColor="gray.200">
+        💡 Highlight any log line to add an error note for your team
+      </Box>
       <Box
         data-testid="virtual-scroll-container"
         flexGrow={1}
@@ -586,43 +588,59 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
             position="relative"
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => (
+              (() => {
+                const hasMatchedNote = (matchingNotesByLineIndex.get(virtualRow.index)?.length ?? 0) > 0;
+
+                return (
               <Box
                 _ltr={{ left: 0, right: "auto" }}
                 _rtl={{ left: "auto", right: 0 }}
                 bgColor={
-                  Boolean(hash) && virtualRow.index === Number(hash) - 1 ? "brand.emphasized" : "transparent"
+                  Boolean(hash) && virtualRow.index === Number(hash) - 1
+                    ? "brand.emphasized"
+                    : hasMatchedNote
+                      ? "blue.50"
+                      : "transparent"
                 }
+                cursor={hasMatchedNote ? "pointer" : undefined}
                 data-index={virtualRow.index}
                 data-testid={`virtualized-item-${virtualRow.index}`}
                 key={virtualRow.key}
+                onClick={hasMatchedNote ? () => handleOpenMatchedNote(virtualRow.index) : undefined}
                 position="absolute"
                 ref={rowVirtualizer.measureElement}
+                role={hasMatchedNote ? "button" : undefined}
                 top={0}
                 transform={`translateY(${virtualRow.start}px)`}
                 width={wrap ? "100%" : "max-content"}
               >
                 <HStack alignItems="flex-start" gap={0}>
-                  {(matchingNotesByLineIndex.get(virtualRow.index)?.length ?? 0) > 0 ? (
-                    <Tooltip content="View error note" openDelay={100}>
+                  {hasMatchedNote ? (
+                    <Tooltip content="View error note" openDelay={100} portalled>
                       <IconButton
                         aria-label="View error note"
-                        colorPalette="blue"
+                        color="blue.600"
                         h="16px"
                         minW="16px"
+                        mr={-2}
                         onClick={() => handleOpenMatchedNote(virtualRow.index)}
                         px={0}
-                        size="2xs"
+                        size="xs"
                         title="View error note"
                         variant="ghost"
                         w="16px"
+                        paddingTop={1}
+                        paddingLeft={1}
                       >
-                        <FiBookOpen />
+                        <FiBookOpen strokeWidth={2} />
                       </IconButton>
                     </Tooltip>
                   ) : undefined}
                   <Box>{parsedLogs[virtualRow.index] ?? undefined}</Box>
                 </HStack>
               </Box>
+                );
+              })()
             ))}
           </VStack>
         </Code>

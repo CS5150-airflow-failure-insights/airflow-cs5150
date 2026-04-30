@@ -43,4 +43,4 @@ with DAG(
     t3 = PythonOperator(task_id="transform_data",     python_callable=transform_data)
     t4 = PythonOperator(task_id="load_to_warehouse",  python_callable=load_to_warehouse)
 
-    t1 >> t2 >> t3 >> t4
+    # t1 >> t2 >> t3 >> t4
