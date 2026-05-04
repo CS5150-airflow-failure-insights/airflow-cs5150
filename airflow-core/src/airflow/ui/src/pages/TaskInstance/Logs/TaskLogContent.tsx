@@ -54,6 +54,7 @@ type UiErrorNote = {
   external_url: string | null;
   signature_regex: string; // for regex matching
   signature_canonical: string; // what the error looks like
+  created_at?: string | null;
 };
 
 type UiErrorNoteUpdate = Pick<UiErrorNote, "note_id" | "author" | "note_text" | "external_url">;
@@ -805,6 +806,16 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                 </Text>
                 <Text fontSize="sm" fontWeight="medium">
                   {activeMatchedNote?.author ?? "-"}
+                </Text>
+              </Box>
+              <Box flex={1}>
+                <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="gray.600" mb={1}>
+                  Date Added
+                </Text>
+                <Text fontSize="sm" fontWeight="medium" color="gray.700">
+                  {activeMatchedNote?.created_at
+                    ? new Date(activeMatchedNote.created_at).toLocaleDateString()
+                    : "-"}
                 </Text>
               </Box>
               {activeMatchedLineIndex !== null ? (
