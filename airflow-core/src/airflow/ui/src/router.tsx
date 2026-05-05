@@ -19,6 +19,8 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createBrowserRouter } from "react-router-dom";
 
+
+
 import { UseConfigServiceGetConfigsKeyFn } from "openapi/queries";
 import { ConfigService } from "openapi/requests/services.gen";
 import { BaseLayout } from "src/layouts/BaseLayout";
@@ -38,6 +40,7 @@ import { DagRuns } from "src/pages/DagRuns";
 import { DagsList } from "src/pages/DagsList";
 import { Dashboard } from "src/pages/Dashboard";
 import { ErrorPage } from "src/pages/Error";
+import { ErrorNotes } from "src/pages/ErrorNotes";
 import { Events } from "src/pages/Events";
 import { ExternalView } from "src/pages/ExternalView";
 import { GroupTaskInstance } from "src/pages/GroupTaskInstance";
@@ -155,6 +158,10 @@ export const routerConfig = [
       {
         element: <Connections />,
         path: "connections",
+      },
+      {
+        element: <ErrorNotes />,
+        path: "error-notes",
       },
       pluginRoute,
       {

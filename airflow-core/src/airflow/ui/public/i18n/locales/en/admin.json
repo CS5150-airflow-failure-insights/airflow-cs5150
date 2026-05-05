@@ -78,6 +78,20 @@
     "selected": "Selected",
     "tooltip": "Delete selected connections"
   },
+  "errorNotes": {
+    "columns": {
+      "actions": "Actions",
+      "author": "Author",
+      "dateAdded": "Date Added",
+      "link": "Link",
+      "matchedError": "Matched Error",
+      "note": "Note"
+    },
+    "description": "View and manage all documented error solutions. Search by error text or note content.",
+    "myNotesOnly": "My notes only",
+    "searchPlaceholder": "Search error notes",
+    "title": "Error Notes"
+  },
   "formActions": {
     "save": "Save"
   },

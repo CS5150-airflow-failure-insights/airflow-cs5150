@@ -24,6 +24,7 @@ import { isValidElement, useLayoutEffect, useRef, useState, useCallback, useMemo
 import { useHotkeys } from "react-hotkeys-hook";
 import { useTranslation } from "react-i18next";
 import { FiBookOpen, FiChevronDown, FiChevronUp, FiEdit2, FiExternalLink } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
 
 
 
@@ -72,9 +73,7 @@ const extractTextFromNode = (node: unknown): string => {
   }
 
   if (Array.isArray(node)) {
-    const parts = node
-      .map((child) => extractTextFromNode(child))
-      .filter((text) => text.length > 0);
+    const parts = node.map((child) => extractTextFromNode(child)).filter((text) => text.length > 0);
 
     const result = parts.reduce((acc, part, i) => {
       if (i === 0) return part;
@@ -151,6 +150,7 @@ const ScrollToButton = ({
 export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }: Props) => {
   const hash = location.hash.replace("#", "");
   const parentRef = useRef<HTMLDivElement | null>(null);
+  const navigate = useNavigate();
 
   // MOCK ERROR NOTES
   // const [notes, setNotes] = useState<UiErrorNote[]>([
@@ -464,9 +464,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
       const status = axios.isAxiosError(error) ? error.response?.status : undefined;
       toaster.create({
         description:
-          status === 403
-            ? "Only the note author can edit this note."
-            : "The note could not be updated.",
+          status === 403 ? "Only the note author can edit this note." : "The note could not be updated.",
         title: "Update failed",
         type: "error",
       });
@@ -497,9 +495,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
       const status = axios.isAxiosError(error) ? error.response?.status : undefined;
       toaster.create({
         description:
-          status === 403
-            ? "Only the note author can delete this note."
-            : "The note could not be deleted.",
+          status === 403 ? "Only the note author can delete this note." : "The note could not be deleted.",
         title: "Delete failed",
         type: "error",
       });
@@ -527,7 +523,7 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     });
 
     return sorted[0] ?? null;
-  }
+  };
 
   const handleOpenMatchedNote = (lineIndex: number) => {
     const matchedNotes = matchingNotesByLineIndex.get(lineIndex) ?? [];
@@ -575,7 +571,15 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
     <Box display="flex" flexDirection="column" flexGrow={1} h="100%" minHeight={0} position="relative">
       <ErrorAlert error={error ?? logError} />
       <ProgressBar size="xs" visibility={isLoading ? "visible" : "hidden"} />
-      <Box px={3} py={2} bg="gray.50" fontSize="xs" color="gray.600" borderBottom="1px solid" borderColor="gray.200">
+      <Box
+        px={3}
+        py={2}
+        bg="gray.50"
+        fontSize="xs"
+        color="gray.600"
+        borderBottom="1px solid"
+        borderColor="gray.200"
+      >
         💡 Highlight any log line to add an error note for your team
       </Box>
       <Box
@@ -604,61 +608,61 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
             h={`${rowVirtualizer.getTotalSize()}px`}
             position="relative"
           >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => (
+            {rowVirtualizer.getVirtualItems().map((virtualRow) =>
               (() => {
                 const hasMatchedNote = (matchingNotesByLineIndex.get(virtualRow.index)?.length ?? 0) > 0;
 
                 return (
-              <Box
-                _ltr={{ left: 0, right: "auto" }}
-                _rtl={{ left: "auto", right: 0 }}
-                bgColor={
-                  Boolean(hash) && virtualRow.index === Number(hash) - 1
-                    ? "brand.emphasized"
-                    : hasMatchedNote
-                      ? "blue.50"
-                      : "transparent"
-                }
-                cursor={hasMatchedNote ? "pointer" : undefined}
-                data-index={virtualRow.index}
-                data-testid={`virtualized-item-${virtualRow.index}`}
-                  key={virtualRow.key}
-                  onClick={hasMatchedNote ? () => handleRowClick(virtualRow.index) : undefined}
-                position="absolute"
-                ref={rowVirtualizer.measureElement}
-                role={hasMatchedNote ? "button" : undefined}
-                top={0}
-                transform={`translateY(${virtualRow.start}px)`}
-                width={wrap ? "100%" : "max-content"}
-              >
-                <HStack alignItems="flex-start" gap={0}>
-                  {hasMatchedNote ? (
-                    <Tooltip content="View error note" openDelay={100} portalled>
-                      <IconButton
-                        aria-label="View error note"
-                        color="blue.600"
-                        h="16px"
-                        minW="16px"
-                        mr={-2}
-                        onClick={() => handleOpenMatchedNote(virtualRow.index)}
-                        px={0}
-                        size="xs"
-                        title="View error note"
-                        variant="ghost"
-                        w="16px"
-                        paddingTop={1}
-                        paddingLeft={1}
-                      >
-                        <FiBookOpen strokeWidth={2} />
-                      </IconButton>
-                    </Tooltip>
-                  ) : undefined}
-                  <Box>{parsedLogs[virtualRow.index] ?? undefined}</Box>
-                </HStack>
-              </Box>
+                  <Box
+                    _ltr={{ left: 0, right: "auto" }}
+                    _rtl={{ left: "auto", right: 0 }}
+                    bgColor={
+                      Boolean(hash) && virtualRow.index === Number(hash) - 1
+                        ? "brand.emphasized"
+                        : hasMatchedNote
+                          ? "blue.50"
+                          : "transparent"
+                    }
+                    cursor={hasMatchedNote ? "pointer" : undefined}
+                    data-index={virtualRow.index}
+                    data-testid={`virtualized-item-${virtualRow.index}`}
+                    key={virtualRow.key}
+                    onClick={hasMatchedNote ? () => handleRowClick(virtualRow.index) : undefined}
+                    position="absolute"
+                    ref={rowVirtualizer.measureElement}
+                    role={hasMatchedNote ? "button" : undefined}
+                    top={0}
+                    transform={`translateY(${virtualRow.start}px)`}
+                    width={wrap ? "100%" : "max-content"}
+                  >
+                    <HStack alignItems="flex-start" gap={0}>
+                      {hasMatchedNote ? (
+                        <Tooltip content="View error note" openDelay={100} portalled>
+                          <IconButton
+                            aria-label="View error note"
+                            color="blue.600"
+                            h="16px"
+                            minW="16px"
+                            mr={-2}
+                            onClick={() => handleOpenMatchedNote(virtualRow.index)}
+                            px={0}
+                            size="xs"
+                            title="View error note"
+                            variant="ghost"
+                            w="16px"
+                            paddingTop={1}
+                            paddingLeft={1}
+                          >
+                            <FiBookOpen strokeWidth={2} />
+                          </IconButton>
+                        </Tooltip>
+                      ) : undefined}
+                      <Box>{parsedLogs[virtualRow.index] ?? undefined}</Box>
+                    </HStack>
+                  </Box>
                 );
-              })()
-            ))}
+              })(),
+            )}
           </VStack>
         </Code>
       </Box>
@@ -766,11 +770,22 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
       <Dialog.Root onOpenChange={handleCloseKnowledgeModal} open={isKnowledgeModalOpen} size="md">
         <Dialog.Content>
           <Dialog.Header pb={4}>
-            <HStack gap={2} alignItems="center">
-              <FiBookOpen size={20} />
-              <Text fontSize="lg" fontWeight="bold">
-                Error Note
-              </Text>
+            <HStack gap={2} alignItems="center" justifyContent="space-between" width="100%">
+              <HStack gap={2} alignItems="center">
+                <FiBookOpen size={20} />
+                <Text fontSize="lg" fontWeight="bold">
+                  Error Note
+                </Text>
+              </HStack>
+              <Link
+                fontSize="sm"
+                color="blue.600"
+                cursor="pointer"
+                onClick={() => navigate("/error-notes")}
+                _hover={{ textDecoration: "underline" }}
+              >
+                View all
+              </Link>
             </HStack>
           </Dialog.Header>
           <Dialog.CloseTrigger />
@@ -888,56 +903,61 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
           </Dialog.Body>
 
           <Dialog.Footer pt={4} borderTop="1px solid" borderColor="gray.200">
-            <HStack gap={2} justifyContent="flex-end">
-              {canEditActiveMatchedNote && !isEditingMatchedNote ? (
-                <Button onClick={() => setIsEditingMatchedNote(true)} variant="outline">
-                  Edit
-                </Button>
-              ) : null}
-              {canEditActiveMatchedNote && isEditingMatchedNote ? (
-                <Button
-                  colorPalette="blue"
-                  disabled={!editedMatchedNoteText.trim() || isUpdatingMatchedNote || isDeletingMatchedNote}
-                  onClick={() => {
-                    if (activeMatchedNote === null) {
-                      return;
-                    }
-                    updateMatchedNote({
-                      noteId: activeMatchedNote.note_id,
-                      noteText: editedMatchedNoteText.trim(),
-                      externalUrl: editedMatchedNoteUrl.trim() || null,
-                    });
-                  }}
-                >
-                  Save
-                </Button>
-              ) : null}
-              {canEditActiveMatchedNote && isEditingMatchedNote ? (
-                <Button
-                  disabled={isUpdatingMatchedNote || isDeletingMatchedNote}
-                  onClick={() => {
-                    setEditedMatchedNoteText(activeMatchedNote?.note_text ?? "");
-                    setEditedMatchedNoteUrl(activeMatchedNote?.external_url ?? "");
-                    setIsEditingMatchedNote(false);
-                  }}
-                  variant="outline"
-                >
-                  Cancel Edit
-                </Button>
-              ) : null}
-              {canEditActiveMatchedNote && !isEditingMatchedNote ? (
-                <Button
-                  colorPalette="red"
-                  disabled={isUpdatingMatchedNote || isDeletingMatchedNote}
-                  onClick={() => setIsDeleteConfirmOpen(true)}
-                  variant="outline"
-                >
-                  Delete
-                </Button>
-              ) : null}
-              <Button onClick={handleCloseKnowledgeModal} variant="outline">
-                Close
+            <HStack gap={2} justifyContent="space-between" width="100%">
+              <Button variant="outline" colorPalette="blue" onClick={() => navigate("/error-notes")}>
+                View all error notes
               </Button>
+              <HStack gap={2}>
+                {canEditActiveMatchedNote && !isEditingMatchedNote ? (
+                  <Button onClick={() => setIsEditingMatchedNote(true)} variant="outline">
+                    Edit
+                  </Button>
+                ) : null}
+                {canEditActiveMatchedNote && isEditingMatchedNote ? (
+                  <Button
+                    colorPalette="blue"
+                    disabled={!editedMatchedNoteText.trim() || isUpdatingMatchedNote || isDeletingMatchedNote}
+                    onClick={() => {
+                      if (activeMatchedNote === null) {
+                        return;
+                      }
+                      updateMatchedNote({
+                        noteId: activeMatchedNote.note_id,
+                        noteText: editedMatchedNoteText.trim(),
+                        externalUrl: editedMatchedNoteUrl.trim() || null,
+                      });
+                    }}
+                  >
+                    Save
+                  </Button>
+                ) : null}
+                {canEditActiveMatchedNote && isEditingMatchedNote ? (
+                  <Button
+                    disabled={isUpdatingMatchedNote || isDeletingMatchedNote}
+                    onClick={() => {
+                      setEditedMatchedNoteText(activeMatchedNote?.note_text ?? "");
+                      setEditedMatchedNoteUrl(activeMatchedNote?.external_url ?? "");
+                      setIsEditingMatchedNote(false);
+                    }}
+                    variant="outline"
+                  >
+                    Cancel Edit
+                  </Button>
+                ) : null}
+                {canEditActiveMatchedNote && !isEditingMatchedNote ? (
+                  <Button
+                    colorPalette="red"
+                    disabled={isUpdatingMatchedNote || isDeletingMatchedNote}
+                    onClick={() => setIsDeleteConfirmOpen(true)}
+                    variant="outline"
+                  >
+                    Delete
+                  </Button>
+                ) : null}
+                <Button onClick={handleCloseKnowledgeModal} variant="outline">
+                  Close
+                </Button>
+              </HStack>
             </HStack>
           </Dialog.Footer>
         </Dialog.Content>
@@ -958,4 +978,4 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
       />
     </Box>
   );
-}
+};
