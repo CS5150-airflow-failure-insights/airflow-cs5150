@@ -777,15 +777,6 @@ export const TaskLogContent = ({ error, isLoading, logError, parsedLogs, wrap }:
                   Error Note
                 </Text>
               </HStack>
-              <Link
-                fontSize="sm"
-                color="blue.600"
-                cursor="pointer"
-                onClick={() => navigate("/error-notes")}
-                _hover={{ textDecoration: "underline" }}
-              >
-                View all
-              </Link>
             </HStack>
           </Dialog.Header>
           <Dialog.CloseTrigger />
