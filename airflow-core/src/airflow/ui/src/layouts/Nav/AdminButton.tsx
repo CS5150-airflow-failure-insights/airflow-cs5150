@@ -83,6 +83,11 @@ export const AdminButton = ({
       </Menu.Trigger>
       <Menu.Content>
         {menuItems}
+        <Menu.Item asChild key="Error Notes" value="Error Notes">
+          <RouterLink aria-label="Error Notes" to="/error-notes">
+            Error Notes
+          </RouterLink>
+        </Menu.Item>
         {externalViews.map((view) => (
           <PluginMenuItem {...view} key={view.name} />
         ))}
